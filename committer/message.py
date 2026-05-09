@@ -31,7 +31,7 @@ def _build_prefix(type_: str, scope: str) -> str:
 
 def assemble_message(payload: CommitMessage, config: Config) -> str:
     """Assemble a commit message from the validated CommitMessage payload."""
-    type_ = config.type or payload.type
+    type_ = config.type if config.type is not None else payload.type
     scope = config.scope if config.scope is not None else payload.scope
     subject = payload.subject.strip()
     body = "" if config.no_body else payload.body.strip()

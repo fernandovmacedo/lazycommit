@@ -119,7 +119,8 @@ def load_xdg_config() -> None:
     except tomllib.TOMLDecodeError as exc:
         warn(f"config.toml is invalid ({exc}); using defaults")
         return
-    except OSError:
+    except OSError as exc:
+        warn(f"config.toml is unreadable ({exc}); using defaults")
         return
 
     mapping = {

@@ -24,8 +24,8 @@ from committer.config import (
     Config,
 )
 from committer.console import (
-    _print_verbose_request,
-    _print_verbose_response,
+    _print_verbose_request,  # noqa: F401
+    _print_verbose_response,  # noqa: F401
     die,
     err,
     out,
@@ -61,7 +61,7 @@ from committer.rewrite import (
     _is_conventional,
 )
 
-__version__ = "1.0"
+__version__ = "1.0.0"
 
 __all__ = [
     # Public API
@@ -77,8 +77,6 @@ __all__ = [
     "err",
     "warn",
     "die",
-    "_print_verbose_request",
-    "_print_verbose_response",
     # Git operations
     "run_git",
     "has_staged_changes",
@@ -152,6 +150,32 @@ class ParsedRewriteArgs(argparse.Namespace):
     directory: str | None
 
 
+def _non_negative_int(value: str) -> int:
+    """Argparse validator for integer options that allow zero."""
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"must be an integer, got {value!r}"
+        ) from exc
+    if number < 0:
+        raise argparse.ArgumentTypeError(f"must be >= 0, got {number}")
+    return number
+
+
+def _positive_float(value: str) -> float:
+    """Argparse validator for numeric options that must be positive."""
+    try:
+        number = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"must be a number, got {value!r}"
+        ) from exc
+    if number <= 0:
+        raise argparse.ArgumentTypeError(f"must be > 0, got {number}")
+    return number
+
+
 def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) -> None:
     """Add arguments shared by commit and rewrite commands."""
     parser.add_argument(
@@ -212,14 +236,14 @@ def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) 
     parser.add_argument(
         "-d",
         "--max-diff-chars",
-        type=int,
+        type=_non_negative_int,
         default=int(os.environ.get("COMMITTER_MAX_DIFF_CHARS", "12000")),
         help="Max diff characters sent to model",
     )
     parser.add_argument(
         "-T",
         "--timeout",
-        type=float,
+        type=_positive_float,
         default=float(os.environ.get("COMMITTER_TIMEOUT", "10.0")),
         help="API timeout in seconds",
     )
@@ -234,7 +258,7 @@ def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) 
         parser.add_argument(
             "-B",
             "--bulk-threshold",
-            type=int,
+            type=_non_negative_int,
             default=int(os.environ.get("COMMITTER_BULK_THRESHOLD", "50")),
             help=(
                 "Skip AI when staged files exceed this count "
@@ -278,6 +302,8 @@ def _parse_commit_args() -> Config:
     fallback = args.fallback.strip() if args.fallback else None
     if args.fallback is not None and not fallback:
         parser.error("--fallback cannot be empty or whitespace-only")
+    if args.type is not None and not args.type.strip():
+        parser.error("--type cannot be empty or whitespace-only")
 
     return Config(
         subcommand="commit",
@@ -382,11 +408,10 @@ def parse_args() -> Config:
 
 def main() -> int:
     """Main entry point for the committer CLI."""
-    # Load XDG config FIRST, before parsing args
-    # This ensures env vars are available as CLI defaults
-    load_xdg_config()
-
     try:
+        # Load XDG config FIRST, before parsing args
+        # This ensures env vars are available as CLI defaults
+        load_xdg_config()
         config = parse_args()
     except KeyboardInterrupt:
         return 130
@@ -394,7 +419,10 @@ def main() -> int:
     if config.directory is not None:
         if not os.path.isdir(config.directory):
             die(f"cannot change directory: {config.directory!r} does not exist")
-        os.chdir(config.directory)
+        try:
+            os.chdir(config.directory)
+        except OSError as exc:
+            die(f"cannot change directory: {exc}")
 
     try:
         if config.subcommand == "rewrite":

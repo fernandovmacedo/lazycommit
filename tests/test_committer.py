@@ -119,6 +119,14 @@ def test_assemble_message_type_override() -> None:
     assert msg == "fix: add thing"
 
 
+def test_assemble_message_empty_type_override() -> None:
+    msg = committer.assemble_message(
+        CommitMessage(type="feat", scope="", subject="add thing", body=""),
+        parsed_args(type=""),
+    )
+    assert msg == ": add thing"
+
+
 def test_assemble_message_scope_override() -> None:
     msg = committer.assemble_message(
         CommitMessage(type="feat", scope="", subject="add thing", body=""),
@@ -671,6 +679,32 @@ def test_load_xdg_config_handles_invalid_toml(
     assert "config.toml is invalid" in warn_mock.call_args[0][0]
 
 
+def test_load_xdg_config_oserror(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_dir = tmp_path / "committer"
+    config_dir.mkdir()
+    config_file = config_dir / "config.toml"
+    config_file.write_text('model = "test-model"\n', encoding="utf-8")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    warn_mock = Mock()
+    monkeypatch.setattr(git_module, "warn", warn_mock)
+
+    real_open = open
+
+    def fake_open(path: object, *args: object, **kwargs: object) -> object:
+        if str(path) == str(config_file):
+            raise PermissionError("permission denied")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", fake_open)
+
+    committer.load_xdg_config()
+
+    warn_mock.assert_called_once()
+    assert "config.toml is unreadable" in warn_mock.call_args[0][0]
+
+
 def test_config_invalid_env_var(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -764,6 +798,18 @@ def test_get_rewrite_shas_from_sha(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert out == ["b2", "c3"]
     assert ["git", "log", "--format=%H", "--reverse", "b2~..HEAD"] in calls
+
+
+def test_check_filter_repo_oserror(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_run(*args: object, **kwargs: object) -> SimpleNamespace:
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr(rewrite_module.subprocess, "run", fail_run)
+
+    with pytest.raises(SystemExit) as exc:
+        rewrite_module._check_filter_repo()
+
+    assert exc.value.code == 1
 
 
 def test_get_rewrite_shas_non_conventional(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -960,6 +1006,32 @@ def test_rewrite_flow_nothing_to_rewrite(
     out = capsys.readouterr().out
     assert code == 0
     assert "nothing to rewrite" in out
+    assert "Cost:" not in out
+    assert "Token usage: total=0 input=0 (+ 0 cached) output=0 (reasoning 0)" in out
+
+
+def test_rewrite_flow_api_failure_omits_cost(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(flows, "_check_filter_repo", lambda: None)
+    monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
+    monkeypatch.setattr(committer, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(flows, "_get_rewrite_shas", lambda *_a, **_k: ["a1"])
+    monkeypatch.setattr(flows, "get_branch_name", lambda: "main")
+    monkeypatch.setattr(flows, "_build_commit_context", lambda *_a, **_k: "ctx")
+    monkeypatch.setattr(
+        flows, "run_git", lambda *args: "M\tsrc/app.py" if args[0] == "show" else None
+    )
+    def fail_generate_commit_json(**_kwargs: object) -> tuple[CommitMessage, None]:
+        raise TimeoutError("timeout")
+
+    monkeypatch.setattr(flows, "generate_commit_json", fail_generate_commit_json)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+
+    code = committer._rewrite_flow(parsed_rewrite_args(dry_run=True))
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "Cost:" not in out
     assert "Token usage: total=0 input=0 (+ 0 cached) output=0 (reasoning 0)" in out
 
 
@@ -1223,8 +1295,44 @@ def test_parse_removed_silent_short_flag_rejected() -> None:
         committer.parse_args()
 
 
+def test_parse_negative_max_diff_chars_rejected() -> None:
+    sys.argv = ["committer", "--max-diff-chars", "-1"]
+
+    with pytest.raises(SystemExit) as exc:
+        committer.parse_args()
+
+    assert exc.value.code == 2
+
+
+def test_parse_negative_timeout_rejected() -> None:
+    sys.argv = ["committer", "--timeout", "-1"]
+
+    with pytest.raises(SystemExit) as exc:
+        committer.parse_args()
+
+    assert exc.value.code == 2
+
+
+def test_parse_zero_timeout_rejected() -> None:
+    sys.argv = ["committer", "--timeout", "0"]
+
+    with pytest.raises(SystemExit) as exc:
+        committer.parse_args()
+
+    assert exc.value.code == 2
+
+
+def test_parse_empty_type_rejected() -> None:
+    sys.argv = ["committer", "--type", ""]
+
+    with pytest.raises(SystemExit) as exc:
+        committer.parse_args()
+
+    assert exc.value.code == 2
+
+
 def test_version_exposed() -> None:
-    assert committer.__version__ == "1.0"
+    assert committer.__version__ == "1.0.0"
 
 
 def test_commit_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
@@ -1234,7 +1342,7 @@ def test_commit_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
         committer.parse_args()
 
     assert exc.value.code == 0
-    assert capsys.readouterr().out.strip() == "committer 1.0"
+    assert capsys.readouterr().out.strip() == "committer 1.0.0"
 
 
 def test_rewrite_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
@@ -1244,7 +1352,7 @@ def test_rewrite_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
         committer.parse_args()
 
     assert exc.value.code == 0
-    assert capsys.readouterr().out.strip() == "committer rewrite 1.0"
+    assert capsys.readouterr().out.strip() == "committer rewrite 1.0.0"
 
 
 def test_logger_falls_back_to_nullhandler(
@@ -1315,6 +1423,36 @@ def test_main_directory_not_exists(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(SystemExit) as exc:
         committer.main()
     assert exc.value.code == 1
+
+
+def test_main_chdir_permission_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(committer, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(
+        committer, "parse_args", lambda: parsed_args(directory=str(tmp_path))
+    )
+
+    def fail_chdir(_path: str) -> None:
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr(os, "chdir", fail_chdir)
+
+    with pytest.raises(SystemExit) as exc:
+        committer.main()
+
+    assert exc.value.code == 1
+
+
+def test_main_returns_130_on_keyboard_interrupt_during_load_xdg_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_keyboard_interrupt() -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(committer, "load_xdg_config", raise_keyboard_interrupt)
+
+    assert committer.main() == 130
 
 
 # ── Meta-timeout tests ─────────────────────────────────────────────────────

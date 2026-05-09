@@ -59,6 +59,13 @@ class UsageStats:
             self.cost = (self.cost or 0.0) + (other.cost or 0.0)
 
 
+def _get_detail(obj: object, key: str) -> int:
+    """Read a usage detail from either an object or a dict payload."""
+    if isinstance(obj, dict):
+        return int(obj.get(key, 0) or 0)
+    return int(getattr(obj, key, 0) or 0)
+
+
 def _extract_usage_stats(response: Any) -> UsageStats | None:
     """Extract usage statistics from a LiteLLM completion response."""
     usage = getattr(response, "usage", None)
@@ -77,25 +84,11 @@ def _extract_usage_stats(response: Any) -> UsageStats | None:
 
     cached_tokens = 0
     if prompt_details is not None:
-        cached_tokens = int(
-            getattr(prompt_details, "cached_tokens", 0)
-            or (
-                prompt_details.get("cached_tokens", 0)
-                if isinstance(prompt_details, dict)
-                else 0
-            )
-        )
+        cached_tokens = _get_detail(prompt_details, "cached_tokens")
 
     reasoning_tokens = 0
     if completion_details is not None:
-        reasoning_tokens = int(
-            getattr(completion_details, "reasoning_tokens", 0)
-            or (
-                completion_details.get("reasoning_tokens", 0)
-                if isinstance(completion_details, dict)
-                else 0
-            )
-        )
+        reasoning_tokens = _get_detail(completion_details, "reasoning_tokens")
 
     return UsageStats(
         prompt_tokens,

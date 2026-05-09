@@ -294,7 +294,7 @@ def _rewrite_flow(config: Config) -> int:
         log_info("rewrite_flow end: nothing to rewrite")
         if not config.silent:
             out("nothing to rewrite")
-            _print_summary(time.perf_counter() - start, UsageStats(0, 0, 0.0))
+            _print_summary(time.perf_counter() - start, UsageStats(0, 0))
         return 0
     log_info(f"rewrite_flow commits={len(shas)}")
     if not config.silent and config.verbose:
@@ -307,7 +307,7 @@ def _rewrite_flow(config: Config) -> int:
         warn("OPENROUTER_API_KEY not set, using fallback")
 
     message_map: dict[str, str] = {}
-    usage_totals = UsageStats(0, 0, 0.0)
+    usage_totals = UsageStats(0, 0)
     for i, sha in enumerate(shas):
         log_info(f"rewrite sha={sha[:8]} ({i + 1}/{len(shas)}) start")
         user_context = _build_commit_context(sha, branch, config.max_diff_chars)

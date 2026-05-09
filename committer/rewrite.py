@@ -25,7 +25,7 @@ def _check_filter_repo() -> None:
         result = subprocess.run(
             ["git", "filter-repo", "--version"], capture_output=True, check=False
         )
-    except FileNotFoundError:
+    except OSError:
         result = None
 
     if result is None or result.returncode != 0:

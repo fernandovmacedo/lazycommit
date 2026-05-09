@@ -1,13 +1,13 @@
 [project]
 name = "committer"
-version = "1.0"
+version = "1.0.0"
 description = "AI-powered git commit message generator with Conventional Commits"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Fernando V Macedo", email = "fernandovmacedo@gmail.com" }]
 keywords = ["git", "commit", "conventional-commits", "ai", "openrouter"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
