@@ -1,36 +1,56 @@
 # committer
 
-`committer` is a Python CLI that stages changes, generates a Conventional Commit message through OpenRouter structured outputs, and runs `git commit` in one command. It also includes a `rewrite` subcommand for batch-rewriting existing history into Conventional Commit format.
+[![CI](https://github.com/fernandovmacedo/committer/actions/workflows/ci.yml/badge.svg)](https://github.com/fernandovmacedo/committer/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-When AI generation is unavailable, times out, returns invalid structured output, or is skipped for bulk changes, `committer` falls back to a deterministic message generator so the command still completes.
+`committer` is a Python CLI that stages changes, generates Conventional Commit messages through OpenRouter structured outputs, and runs `git commit` in one command. It also includes a `rewrite` subcommand for batch-rewriting existing history into Conventional Commit format.
+
+When AI generation is unavailable, times out, returns invalid structured output, or is intentionally skipped for bulk changes, `committer` falls back to a deterministic message generator so the command still completes.
 
 ## Why
 
-You can always ask your coding agent to commit for you, but agent models are often slower and more expensive than they need to be for this step. `committer` is meant for the middle of AI-assisted coding sessions, where you want to keep moving and still produce clean Conventional Commits.
+`committer` is built for the middle of AI-assisted coding sessions, where you want fast, cheap, predictable commits without spending a larger model call on commit generation itself.
 
-Instead of spending a larger model call on commit generation, `committer` lets you use fast, cheap models to auto-commit work in one command. In practice, these commits usually take under 3 seconds. That keeps the commit step lightweight without giving up structured messages or a reliable fallback path.
+Compared with asking a general coding agent to commit for you, it is narrower on purpose: one CLI, one job, Conventional Commit output, a deterministic fallback, and a rewrite mode for cleaning up existing history.
 
-## Features
+## Quick Start
 
-- Auto-staging that preserves partial staging and skips `git add -A` for `--amend`
-- Conventional Commit output with optional `--type` and `--scope` overrides
-- Deterministic fallback with optional `--fallback MESSAGE`
-- Bulk-change guardrail via `--bulk-threshold` and `--force-ai`
-- `--dry-run` preview mode for both commit and rewrite workflows
-- Optional `--push` after commit or `git push --force-with-lease` after rewrite
-- Clean-worktree protection before non-dry-run history rewrites
-- XDG config loading from `~/.config/committer/config.toml`
-- Optional `.committer.md` or `--context FILE` prompt injection
-- Summary output with elapsed time, token usage, cached tokens, reasoning tokens, and cost when available
-- `-q, --silent` for script-friendly stdout suppression and `-v, --verbose` for prompt/response debugging
+Requirements:
 
-## Install
+- Python 3.11+
+- `uv`
+- `git`
+- `OPENROUTER_API_KEY` in your environment
+
+Install locally from the repo:
 
 ```bash
 uv tool install --editable .
+export OPENROUTER_API_KEY="sk-or-your-key-here"
 ```
 
-Run without installing:
+Preview a message without committing:
+
+```bash
+committer --dry-run
+```
+
+Create a commit:
+
+```bash
+committer
+```
+
+Pass raw `git commit` flags after `--`:
+
+```bash
+committer -- --no-verify
+committer -- --amend
+```
+
+## Install and Requirements
+
+If you do not want to install the CLI into your tool environment, you can run it directly from the repo:
 
 ```bash
 uv run python -m committer --dry-run
@@ -42,9 +62,78 @@ Optional shell alias:
 alias gg='committer'
 ```
 
-## Usage
+The `rewrite` subcommand also requires `git-filter-repo`, which is not installed by `uv tool install`:
 
-### Commit workflow
+```bash
+uv tool install git-filter-repo
+# or: pip install git-filter-repo
+# or: apt install git-filter-repo
+# or: brew install git-filter-repo
+```
+
+## Common Workflows
+
+Standard commit:
+
+```bash
+committer
+```
+
+Preview the generated message:
+
+```bash
+committer -n
+```
+
+Commit and push:
+
+```bash
+committer -p
+```
+
+Force a type and scope:
+
+```bash
+committer -t feat -s cli
+```
+
+Provide extra prompt context:
+
+```bash
+committer -c .committer.md
+```
+
+If staged files exceed the bulk threshold, `committer` skips the AI request and uses the deterministic fallback unless `--force-ai` is set.
+
+## Rewrite Existing History
+
+Use `rewrite` to regenerate commit messages in Conventional Commit format:
+
+```bash
+committer rewrite [options] [SHA]
+```
+
+Common rewrite modes:
+
+- Default behavior rewrites only non-Conventional commit subjects.
+- `committer rewrite -u` rewrites commits in `@{u}..HEAD`.
+- `committer rewrite -a` rewrites the full history.
+- `committer rewrite abc123` rewrites from a specific commit through `HEAD`.
+
+Examples:
+
+```bash
+committer rewrite -n
+committer rewrite -u
+committer rewrite -a -p
+committer rewrite abc123
+```
+
+Non-dry-run rewrites require a clean worktree before commit collection begins.
+
+## Usage Reference
+
+Commit command:
 
 ```bash
 committer [options] [-- <git-commit-args>]
@@ -69,30 +158,17 @@ Common options:
 - `-s, --scope SCOPE` force a scope using lowercase letters, digits, `.`, `_`, `/`, or `-`
 - `-c, --context FILE` load additional prompt context from a file
 
-Pass raw `git commit` flags after `--`:
-
-```bash
-committer -- --no-verify
-committer -- --amend
-```
-
-If staged files exceed `--bulk-threshold`, `committer` skips the AI request and uses the deterministic fallback unless `--force-ai` is set.
-
-### Rewrite workflow
+Rewrite command:
 
 ```bash
 committer rewrite [options] [SHA]
 ```
 
-Modes are mutually exclusive:
-
-- default `-N, --non-conventional`: rewrite only commits whose subject line is not already Conventional Commit formatted
-- `-a, --all`: rewrite the full history
-- `-u, --unpushed`: rewrite commits in `@{u}..HEAD`
-- `SHA`: rewrite from that commit through `HEAD`
-
 Rewrite options:
 
+- `-a, --all` rewrite the full history
+- `-u, --unpushed` rewrite commits in `@{u}..HEAD`
+- `-N, --non-conventional` rewrite only commits whose subject line is not already Conventional Commit formatted
 - `-C, --directory DIR` run inside `DIR` first
 - `-n, --dry-run` preview rewritten messages without changing history
 - `-p, --push` run `git push --force-with-lease` after rewriting
@@ -104,25 +180,6 @@ Rewrite options:
 - `-d, --max-diff-chars N` cap diff characters sent to the model
 - `-T, --timeout SECONDS` set the per-call API timeout
 - `-f, --fallback MESSAGE` use this message whenever a rewrite falls back from AI generation
-
-Examples:
-
-```bash
-committer rewrite -n
-committer rewrite -u
-committer rewrite -a -p
-committer rewrite abc123
-```
-
-`rewrite` requires `git-filter-repo`:
-
-```bash
-pip install git-filter-repo
-# or: apt install git-filter-repo
-# or: brew install git-filter-repo
-```
-
-Non-dry-run rewrites require a clean worktree before commit collection begins.
 
 ## Configuration
 
@@ -162,11 +219,26 @@ Config precedence is CLI flag > environment variable > XDG config > hardcoded de
 | `timeout` | `COMMITTER_TIMEOUT` |
 | `bulk_threshold` | `COMMITTER_BULK_THRESHOLD` |
 
-## Context Injection
-
 If `.committer.md` exists at the repository root, its contents are prepended to the generated user prompt. Use `--context path/to/file.md` to point at a different UTF-8 file.
 
-## Quality Checks
+## Similar Projects
+
+Manual `git commit` is still the right choice when you already know the exact message you want and do not need AI help or rewrite support.
+
+Asking a general coding agent to commit for you is useful when commit generation is part of a larger agent workflow, but it is usually slower, broader, and more expensive than a dedicated CLI.
+
+Other AI commit message tools may generate a subject line, but `committer` is opinionated about a narrower workflow:
+
+- Conventional Commit output is the default contract.
+- Deterministic fallback keeps the command usable when AI generation fails or is skipped.
+- Bulk changes can bypass AI automatically.
+- `rewrite` can clean up older commit history, not just the next commit.
+
+Choose `committer` when you want a small tool focused on reliable Conventional Commits rather than a general-purpose coding assistant.
+
+## Development
+
+Run the local checks with `uv`:
 
 ```bash
 uv run --group dev pytest tests/ -v
@@ -174,9 +246,13 @@ uv run --group dev ruff check committer/ tests/
 uv run --group dev mypy committer/
 ```
 
-## Runtime Dependencies
+Runtime dependencies:
 
 - `litellm`
 - `instructor`
 - `pydantic`
 - `rich`
+
+## License
+
+[MIT](LICENSE)
