@@ -117,12 +117,9 @@ def test_assemble_message_type_override() -> None:
     assert msg == "fix: add thing"
 
 
-def test_assemble_message_empty_type_override() -> None:
-    msg = committer.assemble_message(
-        CommitMessage(type="feat", scope="", subject="add thing", body=""),
-        parsed_args(type=""),
-    )
-    assert msg == ": add thing"
+def test_assemble_message_empty_type_override_rejected() -> None:
+    with pytest.raises(SystemExit):
+        parsed_args(type="")
 
 
 def test_assemble_message_scope_override() -> None:
@@ -131,6 +128,16 @@ def test_assemble_message_scope_override() -> None:
         parsed_args(scope="db"),
     )
     assert msg == "feat(db): add thing"
+
+
+def test_assemble_message_invalid_scope_override_rejected() -> None:
+    with pytest.raises(SystemExit):
+        parsed_args(scope="bad scope")
+
+
+def test_commit_message_invalid_model_scope_rejected() -> None:
+    with pytest.raises(ValueError, match="scope"):
+        CommitMessage(type="feat", scope="bad scope", subject="add thing", body="")
 
 
 def test_assemble_message_truncates_header_to_72() -> None:
@@ -375,7 +382,7 @@ def test_auto_stage_skips_when_already_staged(monkeypatch: pytest.MonkeyPatch) -
     assert ["git", "add", "-A"] not in calls
 
 
-def test_auto_stage_timeout_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_auto_stage_timeout_returns_false(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[str]] = []
 
     def fake_run(cmd: list[str], **kwargs: object) -> SimpleNamespace:
@@ -385,23 +392,26 @@ def test_auto_stage_timeout_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
         raise git_module.subprocess.TimeoutExpired(cmd=cmd, timeout=30)
 
     monkeypatch.setattr(git_module.subprocess, "run", fake_run)
-    committer.auto_stage([])
+    assert committer.auto_stage([]) is False
     assert ["git", "add", "-A"] in calls
 
 
-def test_auto_stage_timeout_logs(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_auto_stage_timeout_warns(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_run(cmd: list[str], **kwargs: object) -> SimpleNamespace:
         if cmd[:3] == ["git", "diff", "--cached"]:
             return SimpleNamespace(returncode=0)
         raise git_module.subprocess.TimeoutExpired(cmd=cmd, timeout=30)
 
-    captured: list[str] = []
+    log_warnings: list[str] = []
+    warnings: list[str] = []
     monkeypatch.setattr(git_module.subprocess, "run", fake_run)
-    monkeypatch.setattr(git_module, "log_debug", captured.append)
+    monkeypatch.setattr(git_module, "log_warning", log_warnings.append)
+    monkeypatch.setattr(git_module, "warn", warnings.append)
 
     committer.auto_stage([])
 
-    assert captured[-1] == "git add -A → timeout after 30s"
+    assert log_warnings[-1] == "git add -A timed out after 30s"
+    assert warnings[-1] == "git add -A timed out after 30s; commit was not created"
 
 
 def test_generate_commit_json_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -555,6 +565,22 @@ def test_commit_changes_hook_failure(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda *a, **k: SimpleNamespace(returncode=1),
     )
     assert committer.commit_changes("msg", ()) == 1
+
+
+def test_commit_changes_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    warnings: list[str] = []
+    log_warnings: list[str] = []
+
+    def fake_run(*args: object, **kwargs: object) -> SimpleNamespace:
+        raise flows.subprocess.TimeoutExpired(cmd=["git", "commit"], timeout=300)
+
+    monkeypatch.setattr(flows.subprocess, "run", fake_run)
+    monkeypatch.setattr(flows, "warn", warnings.append)
+    monkeypatch.setattr(flows, "log_warning", log_warnings.append)
+
+    assert committer.commit_changes("msg", ()) == 1
+    assert warnings == ["git commit timed out after 300s"]
+    assert log_warnings == ["git_commit timed out after 300s"]
 
 
 def test_main_dry_run(
@@ -889,6 +915,22 @@ def test_config_invalid_reasoning_effort_rejected(
     assert "invalid reasoning_effort 'turbo'" in capsys.readouterr().err
 
 
+def test_config_invalid_numeric_ranges_rejected() -> None:
+    with pytest.raises(SystemExit):
+        Config(subcommand="commit", max_diff_chars=-1)
+    with pytest.raises(SystemExit):
+        Config(subcommand="commit", timeout=0)
+    with pytest.raises(SystemExit):
+        Config(subcommand="commit", bulk_threshold=-1)
+
+
+def test_config_invalid_type_and_scope_rejected() -> None:
+    with pytest.raises(SystemExit):
+        Config(subcommand="commit", type="wip")
+    with pytest.raises(SystemExit):
+        Config(subcommand="commit", scope="bad scope")
+
+
 def test_load_xdg_config_converts_numbers_to_strings(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -919,6 +961,18 @@ def test_main_nothing_to_commit(
 
     assert committer.main() == 0
     assert "nothing to commit" in capsys.readouterr().out
+
+
+def test_commit_flow_returns_error_when_auto_stage_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
+    monkeypatch.setattr(flows, "auto_stage", lambda git_args: False)
+    staged_check = Mock()
+    monkeypatch.setattr(flows, "has_staged_changes", staged_check)
+
+    assert committer._commit_flow(parsed_args()) == 1
+    staged_check.assert_not_called()
 
 
 def test_main_not_repo(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1066,6 +1120,52 @@ def test_get_rewrite_shas_unpushed_empty(monkeypatch: pytest.MonkeyPatch) -> Non
     assert out == []
 
 
+def test_get_rewrite_shas_from_sha_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_run(cmd: list[str], **kwargs: object) -> SimpleNamespace:
+        raise rewrite_module.subprocess.TimeoutExpired(cmd=cmd, timeout=30)
+
+    monkeypatch.setattr(rewrite_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        rewrite_module, "die", lambda msg: (_ for _ in ()).throw(SystemExit(msg))
+    )
+
+    with pytest.raises(SystemExit, match="timed out collecting commits"):
+        committer._get_rewrite_shas(
+            "abc123", all_commits=False, non_conventional=False, unpushed=False
+        )
+
+
+def test_get_rewrite_shas_unpushed_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_run(cmd: list[str], **kwargs: object) -> SimpleNamespace:
+        raise rewrite_module.subprocess.TimeoutExpired(cmd=cmd, timeout=30)
+
+    monkeypatch.setattr(rewrite_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        rewrite_module, "die", lambda msg: (_ for _ in ()).throw(SystemExit(msg))
+    )
+
+    with pytest.raises(SystemExit, match="timed out collecting unpushed commits"):
+        committer._get_rewrite_shas(
+            None, all_commits=False, non_conventional=False, unpushed=True
+        )
+
+
+def test_ensure_clean_worktree_allows_clean(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(rewrite_module, "run_git", lambda *args: "")
+
+    committer._ensure_clean_worktree()
+
+
+def test_ensure_clean_worktree_rejects_dirty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(rewrite_module, "run_git", lambda *args: "M src/app.py")
+    monkeypatch.setattr(
+        rewrite_module, "die", lambda msg: (_ for _ in ()).throw(SystemExit(msg))
+    )
+
+    with pytest.raises(SystemExit, match="clean worktree"):
+        committer._ensure_clean_worktree()
+
+
 def test_build_commit_context(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_run_git(*args: str) -> str | None:
         if args == ("show", "-s", "--format=%B", "abc123"):
@@ -1158,6 +1258,7 @@ def test_rewrite_flow_dry_run(
 
 def test_rewrite_flow_applies(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(flows, "_check_filter_repo", lambda: None)
+    monkeypatch.setattr(flows, "_ensure_clean_worktree", lambda: None)
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
     monkeypatch.setattr(committer, "load_xdg_config", lambda: None)
     monkeypatch.setattr(flows, "_get_rewrite_shas", lambda *_a, **_k: ["a1", "b2"])
@@ -1181,10 +1282,41 @@ def test_rewrite_flow_applies(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured == {"a1": "feat: add x", "b2": "feat: add x"}
 
 
+def test_rewrite_flow_rejects_dirty_worktree(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(flows, "_check_filter_repo", lambda: None)
+    monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
+
+    def fail_clean() -> None:
+        raise SystemExit("dirty")
+
+    monkeypatch.setattr(flows, "_ensure_clean_worktree", fail_clean)
+    get_shas = Mock()
+    monkeypatch.setattr(flows, "_get_rewrite_shas", get_shas)
+
+    with pytest.raises(SystemExit, match="dirty"):
+        committer._rewrite_flow(parsed_rewrite_args())
+
+    get_shas.assert_not_called()
+
+
+def test_rewrite_flow_dry_run_skips_clean_worktree_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(flows, "_check_filter_repo", lambda: None)
+    monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
+    clean_check = Mock(side_effect=SystemExit("dirty"))
+    monkeypatch.setattr(flows, "_ensure_clean_worktree", clean_check)
+    monkeypatch.setattr(flows, "_get_rewrite_shas", lambda *_a, **_k: [])
+
+    assert committer._rewrite_flow(parsed_rewrite_args(dry_run=True)) == 0
+    clean_check.assert_not_called()
+
+
 def test_rewrite_flow_nothing_to_rewrite(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(flows, "_check_filter_repo", lambda: None)
+    monkeypatch.setattr(flows, "_ensure_clean_worktree", lambda: None)
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
     monkeypatch.setattr(committer, "load_xdg_config", lambda: None)
     monkeypatch.setattr(flows, "_get_rewrite_shas", lambda *_a, **_k: [])
@@ -1224,6 +1356,7 @@ def test_rewrite_flow_api_failure_omits_cost(
 
 def test_rewrite_flow_push(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(flows, "_check_filter_repo", lambda: None)
+    monkeypatch.setattr(flows, "_ensure_clean_worktree", lambda: None)
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
     monkeypatch.setattr(committer, "load_xdg_config", lambda: None)
     monkeypatch.setattr(flows, "_get_rewrite_shas", lambda *_a, **_k: ["a1"])
@@ -1281,10 +1414,64 @@ def test_commit_flow_warns_on_push_failure(
     assert any("remote rejected" in msg for msg in log_warnings)
 
 
+def test_commit_flow_logs_commit_message_preview(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
+    monkeypatch.setattr(flows, "auto_stage", lambda *_a: None)
+    monkeypatch.setattr(flows, "has_staged_changes", lambda: True)
+    monkeypatch.setattr(flows, "get_staged_files", lambda: ["M\tsrc/app.py"])
+    monkeypatch.setattr(flows, "get_staged_stat", lambda: "1 file changed")
+    monkeypatch.setattr(flows, "get_staged_diff", lambda: "diff")
+    monkeypatch.setattr(flows, "get_branch_name", lambda: "main")
+    monkeypatch.setattr(flows, "get_recent_commits", lambda: "abc chore: x")
+    monkeypatch.setattr(flows, "load_context_file", lambda path, root: "")
+    monkeypatch.setattr(flows, "generate_commit_json", _fake_commit_response)
+    monkeypatch.setattr(flows, "commit_changes", lambda message, git_args: 0)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+
+    infos: list[str] = []
+    monkeypatch.setattr(flows, "log_info", infos.append)
+
+    assert committer._commit_flow(parsed_args()) == 0
+    assert any("git_commit start message='feat: add x'" in msg for msg in infos)
+
+
+def test_commit_flow_warns_on_push_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
+    monkeypatch.setattr(flows, "auto_stage", lambda *_a: None)
+    monkeypatch.setattr(flows, "has_staged_changes", lambda: True)
+    monkeypatch.setattr(flows, "get_staged_files", lambda: ["M\tsrc/app.py"])
+    monkeypatch.setattr(flows, "get_staged_stat", lambda: "1 file changed")
+    monkeypatch.setattr(flows, "get_staged_diff", lambda: "diff")
+    monkeypatch.setattr(flows, "get_branch_name", lambda: "main")
+    monkeypatch.setattr(flows, "get_recent_commits", lambda: "abc chore: x")
+    monkeypatch.setattr(flows, "load_context_file", lambda path, root: "")
+    monkeypatch.setattr(flows, "generate_commit_json", _fake_commit_response)
+    monkeypatch.setattr(flows, "commit_changes", lambda message, git_args: 0)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+
+    warnings: list[str] = []
+    monkeypatch.setattr(flows, "warn", warnings.append)
+
+    def fake_run(cmd: list[str], **kwargs: object) -> SimpleNamespace:
+        raise flows.subprocess.TimeoutExpired(cmd=cmd, timeout=120)
+
+    monkeypatch.setattr(flows.subprocess, "run", fake_run)
+
+    code = committer._commit_flow(parsed_args(push=True))
+
+    assert code == 1
+    assert warnings == ["git push timed out after 120s"]
+
+
 def test_rewrite_flow_warns_on_push_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(flows, "_check_filter_repo", lambda: None)
+    monkeypatch.setattr(flows, "_ensure_clean_worktree", lambda: None)
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
     monkeypatch.setattr(flows, "_get_rewrite_shas", lambda *_a, **_k: ["a1"])
     monkeypatch.setattr(flows, "get_branch_name", lambda: "main")
@@ -1311,6 +1498,36 @@ def test_rewrite_flow_warns_on_push_failure(
     assert code == 1
     assert warnings == ["git push --force-with-lease failed"]
     assert any("lease rejected" in msg for msg in log_warnings)
+
+
+def test_rewrite_flow_warns_on_push_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(flows, "_check_filter_repo", lambda: None)
+    monkeypatch.setattr(flows, "_ensure_clean_worktree", lambda: None)
+    monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
+    monkeypatch.setattr(flows, "_get_rewrite_shas", lambda *_a, **_k: ["a1"])
+    monkeypatch.setattr(flows, "get_branch_name", lambda: "main")
+    monkeypatch.setattr(flows, "_build_commit_context", lambda *_a, **_k: "ctx")
+    monkeypatch.setattr(
+        flows, "run_git", lambda *args: "M\tsrc/app.py" if args[0] == "show" else None
+    )
+    monkeypatch.setattr(flows, "generate_commit_json", _fake_commit_response)
+    monkeypatch.setattr(flows, "_apply_filter_repo", lambda message_map: None)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+
+    warnings: list[str] = []
+    monkeypatch.setattr(flows, "warn", warnings.append)
+
+    def fake_run(cmd: list[str], **kwargs: object) -> SimpleNamespace:
+        raise flows.subprocess.TimeoutExpired(cmd=cmd, timeout=120)
+
+    monkeypatch.setattr(flows.subprocess, "run", fake_run)
+
+    code = committer._rewrite_flow(parsed_rewrite_args(push=True))
+
+    assert code == 1
+    assert warnings == ["git push --force-with-lease timed out after 120s"]
 
 
 def test_commit_flow_passes_custom_model(
@@ -1518,6 +1735,72 @@ def test_parse_empty_type_rejected() -> None:
     assert exc.value.code == 2
 
 
+def test_parse_invalid_type_rejected() -> None:
+    sys.argv = ["committer", "--type", "wip"]
+
+    with pytest.raises(SystemExit) as exc:
+        committer.parse_args()
+
+    assert exc.value.code == 2
+
+
+def test_parse_invalid_scope_rejected() -> None:
+    sys.argv = ["committer", "--scope", "bad scope"]
+
+    with pytest.raises(SystemExit) as exc:
+        committer.parse_args()
+
+    assert exc.value.code == 2
+
+
+def test_parse_invalid_env_default_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sys.argv = ["committer"]
+    monkeypatch.setenv("COMMITTER_MAX_DIFF_CHARS", "abc")
+
+    with pytest.raises(SystemExit) as exc:
+        committer.parse_args()
+
+    assert exc.value.code == 1
+
+
+def test_parse_negative_env_defaults_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sys.argv = ["committer"]
+    monkeypatch.setenv("COMMITTER_MAX_DIFF_CHARS", "-1")
+
+    with pytest.raises(SystemExit) as exc:
+        committer.parse_args()
+
+    assert exc.value.code == 1
+
+
+def test_parse_invalid_timeout_env_default_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sys.argv = ["committer"]
+    monkeypatch.setenv("COMMITTER_TIMEOUT", "0")
+
+    with pytest.raises(SystemExit) as exc:
+        committer.parse_args()
+
+    assert exc.value.code == 1
+
+
+def test_parse_invalid_bulk_threshold_env_default_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sys.argv = ["committer"]
+    monkeypatch.setenv("COMMITTER_BULK_THRESHOLD", "-1")
+
+    with pytest.raises(SystemExit) as exc:
+        committer.parse_args()
+
+    assert exc.value.code == 1
+
+
 def test_version_exposed() -> None:
     assert committer.__version__ == "1.0.0"
 
@@ -1563,7 +1846,7 @@ def test_logger_falls_back_to_nullhandler(
         isinstance(handler, logger_module.logging.NullHandler)
         for handler in logger.handlers
     )
-    assert "could not set up log file: disk full" in capsys.readouterr().err
+    assert capsys.readouterr().err == ""
 
 
 def test_parse_rewrite_rejects_bulk_threshold_flag() -> None:
@@ -1683,6 +1966,26 @@ def test_meta_timeout_restores_previous_handler(
 
     assert len(calls) == 2
     assert calls[1] is original  # restored
+
+
+def test_meta_timeout_handler_includes_duration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    handlers: list[object] = []
+
+    def fake_signal(signum: int, handler: object) -> object:
+        handlers.append(handler)
+        return signal.SIG_DFL
+
+    monkeypatch.setattr(flows.signal, "signal", fake_signal)
+    monkeypatch.setattr(flows.signal, "alarm", lambda s: 0)
+
+    with pytest.raises(TimeoutError, match="25s meta-timeout"), flows._ApiMetaTimeout(
+        10.0
+    ):
+        handler = handlers[0]
+        assert callable(handler)
+        handler(signal.SIGALRM, None)
 
 
 def test_meta_timeout_skips_on_non_main_thread(monkeypatch: pytest.MonkeyPatch) -> None:

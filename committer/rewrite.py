@@ -9,7 +9,7 @@ import tempfile
 from contextlib import suppress
 
 from committer.console import die
-from committer.constants import _CONVENTIONAL_RE, DIFF_EXCLUDE_PATTERNS
+from committer.constants import _CONVENTIONAL_RE, DIFF_EXCLUDE_PATTERNS, GIT_TIMEOUT_S
 from committer.git import build_user_context, run_git, truncate_diff
 
 
@@ -39,6 +39,18 @@ def _check_filter_repo() -> None:
         )
 
 
+def _ensure_clean_worktree() -> None:
+    """Require a clean worktree before rewriting history."""
+    status = run_git("status", "--porcelain")
+    if status is None:
+        die("cannot determine worktree status before rewrite")
+    if status:
+        die(
+            "rewrite requires a clean worktree; commit, stash, or discard local"
+            " changes first"
+        )
+
+
 def _get_rewrite_shas(
     sha: str | None,
     all_commits: bool,
@@ -47,12 +59,16 @@ def _get_rewrite_shas(
 ) -> list[str]:
     """Get list of commit SHAs to rewrite based on mode."""
     if sha:
-        ranged = subprocess.run(
-            ["git", "log", "--format=%H", "--reverse", f"{sha}~..HEAD"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        try:
+            ranged = subprocess.run(
+                ["git", "log", "--format=%H", "--reverse", f"{sha}~..HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=GIT_TIMEOUT_S,
+            )
+        except subprocess.TimeoutExpired:
+            die(f"timed out collecting commits from {sha}")
         if ranged.returncode == 0:
             return [line for line in ranged.stdout.splitlines() if line.strip()]
 
@@ -67,12 +83,16 @@ def _get_rewrite_shas(
 
     if unpushed:
         # Get commits in HEAD but not in upstream
-        result = subprocess.run(
-            ["git", "rev-list", "--reverse", "@{u}..HEAD"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                ["git", "rev-list", "--reverse", "@{u}..HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=GIT_TIMEOUT_S,
+            )
+        except subprocess.TimeoutExpired:
+            die("timed out collecting unpushed commits")
         if result.returncode != 0:
             die("no upstream configured for current branch")
         return [line for line in result.stdout.splitlines() if line.strip()]

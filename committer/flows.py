@@ -20,7 +20,7 @@ from committer.console import (
     out,
     warn,
 )
-from committer.constants import SYSTEM_PROMPT
+from committer.constants import GIT_COMMIT_TIMEOUT_S, GIT_PUSH_TIMEOUT_S, SYSTEM_PROMPT
 from committer.git import (
     auto_stage,
     build_user_context,
@@ -45,6 +45,7 @@ from committer.rewrite import (
     _apply_filter_repo,
     _build_commit_context,
     _check_filter_repo,
+    _ensure_clean_worktree,
     _get_rewrite_shas,
 )
 
@@ -87,7 +88,17 @@ class _ApiMetaTimeout:
         if threading.current_thread() is not threading.main_thread():
             log_warning("meta_timeout skipped: not on main thread")
             return self
-        self._prev_handler = signal.signal(signal.SIGALRM, _meta_timeout_handler)
+
+        def handler(signum: int, frame: FrameType | None) -> None:
+            log_warning(
+                f"meta_timeout fired after {self._seconds}s"
+                f" (signal={signum})"
+            )
+            raise TimeoutError(
+                f"API call exceeded {self._seconds}s meta-timeout deadline"
+            )
+
+        self._prev_handler = signal.signal(signal.SIGALRM, handler)
         signal.alarm(self._seconds)
         return self
 
@@ -104,11 +115,17 @@ class _ApiMetaTimeout:
 
 def commit_changes(message: str, git_args: tuple[str, ...]) -> int:
     """Commit changes with the given message."""
-    result = subprocess.run(
-        ["git", "commit", *git_args, "-F", "-"],
-        input=message.encode("utf-8"),
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "commit", *git_args, "-F", "-"],
+            input=message.encode("utf-8"),
+            check=False,
+            timeout=GIT_COMMIT_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        log_warning(f"git_commit timed out after {GIT_COMMIT_TIMEOUT_S}s")
+        warn(f"git commit timed out after {GIT_COMMIT_TIMEOUT_S}s")
+        return 1
     return result.returncode
 
 
@@ -139,7 +156,9 @@ def _commit_flow(config: Config) -> int:
         die("not a git repository")
 
     log_info("auto_stage start")
-    auto_stage(config.git_args)
+    if auto_stage(config.git_args) is False:
+        log_warning("commit_flow end: auto_stage failed")
+        return 1
     log_info("auto_stage end")
 
     if not has_staged_changes():
@@ -256,7 +275,7 @@ def _commit_flow(config: Config) -> int:
             _print_summary(elapsed, usage_stats)
         return 0
 
-    log_info("git_commit start")
+    log_info(f"git_commit start message={message[:60]!r}")
     code = commit_changes(message, config.git_args)
     log_info(f"git_commit end code={code}")
 
@@ -268,9 +287,17 @@ def _commit_flow(config: Config) -> int:
             _print_summary(elapsed, usage_stats)
         if config.push:
             log_info("git_push start")
-            push = subprocess.run(
-                ["git", "push"], capture_output=True, check=False
-            )
+            try:
+                push = subprocess.run(
+                    ["git", "push"],
+                    capture_output=True,
+                    check=False,
+                    timeout=GIT_PUSH_TIMEOUT_S,
+                )
+            except subprocess.TimeoutExpired:
+                log_warning(f"git_push timed out after {GIT_PUSH_TIMEOUT_S}s")
+                warn(f"git push timed out after {GIT_PUSH_TIMEOUT_S}s")
+                return 1
             log_info(f"git_push end code={push.returncode}")
             if push.returncode != 0:
                 stderr = push.stderr.decode("utf-8", errors="replace").strip()
@@ -298,6 +325,8 @@ def _rewrite_flow(config: Config) -> int:
     repo_root = get_repo_root()
     if not repo_root:
         die("not a git repository")
+    if not config.dry_run:
+        _ensure_clean_worktree()
 
     shas = _get_rewrite_shas(
         config.sha, config.all_commits, config.non_conventional, config.unpushed
@@ -393,9 +422,19 @@ def _rewrite_flow(config: Config) -> int:
     exit_code = 0
     if config.push:
         log_info("git_push start force-with-lease")
-        push = subprocess.run(
-            ["git", "push", "--force-with-lease"], capture_output=True, check=False
-        )
+        try:
+            push = subprocess.run(
+                ["git", "push", "--force-with-lease"],
+                capture_output=True,
+                check=False,
+                timeout=GIT_PUSH_TIMEOUT_S,
+            )
+        except subprocess.TimeoutExpired:
+            log_warning(
+                f"git_push force-with-lease timed out after {GIT_PUSH_TIMEOUT_S}s"
+            )
+            warn(f"git push --force-with-lease timed out after {GIT_PUSH_TIMEOUT_S}s")
+            return 1
         log_info(f"git_push end code={push.returncode}")
         if push.returncode != 0:
             stderr = push.stderr.decode("utf-8", errors="replace").strip()

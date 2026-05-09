@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -38,11 +37,7 @@ def _make_logger() -> logging.Logger:
             )
         )
         logger.addHandler(handler)
-    except Exception as exc:
-        print(
-            f"[committer] warning: could not set up log file: {exc}",
-            file=sys.stderr,
-        )
+    except Exception:
         logger.addHandler(logging.NullHandler())
     return logger
 

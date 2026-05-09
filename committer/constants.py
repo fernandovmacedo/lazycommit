@@ -46,8 +46,17 @@ Rules:
 
 MAX_SUBJECT_LEN = 72
 
+# Git subprocess timeouts. Local operations should fail quickly; commits and
+# pushes can legitimately take longer because hooks and networks are involved.
+GIT_TIMEOUT_S = 30
+GIT_COMMIT_TIMEOUT_S = 300
+GIT_PUSH_TIMEOUT_S = 120
+
 # Patterns to exclude from git diffs (lockfiles)
 DIFF_EXCLUDE_PATTERNS = (":(exclude)*.lock", ":(exclude)*lock.json")
+
+# Scope must remain parseable inside a Conventional Commit header.
+SCOPE_RE = re.compile(r"^[a-z0-9][a-z0-9._/-]*$")
 
 # Regex for conventional commit format: type(scope)!?: subject
 _CONVENTIONAL_RE = re.compile(

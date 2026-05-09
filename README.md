@@ -10,6 +10,7 @@ AI-powered git commit message generator that auto-stages, generates a Convention
 - Custom fallback message support with `--fallback`
 - Bulk-change guardrail with `--bulk-threshold` and `--force-ai`
 - `--dry-run` preview mode for both commit and rewrite flows
+- Clean-worktree guard before destructive history rewrites
 - Optional `--push` after commit or `--force-with-lease` after rewrite
 - Token, cached-token, reasoning-token, and cost reporting
 - XDG config support (`~/.config/committer/config.toml`)
@@ -124,6 +125,8 @@ pip install git-filter-repo
 # or: apt install git-filter-repo
 # or: brew install git-filter-repo
 ```
+
+Non-dry-run rewrites require a clean worktree. Commit, stash, or discard local changes before running `committer rewrite` without `--dry-run`.
 
 ## Configuration
 

@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections import Counter
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from committer.config import Config
-from committer.constants import MAX_SUBJECT_LEN
+from committer.constants import MAX_SUBJECT_LEN, SCOPE_RE
 
 
 class CommitMessage(BaseModel):
@@ -22,12 +22,32 @@ class CommitMessage(BaseModel):
     subject: str
     body: str
 
+    @field_validator("scope")
+    @classmethod
+    def _validate_scope(cls, value: str) -> str:
+        scope = value.strip()
+        if scope and not SCOPE_RE.match(scope):
+            raise ValueError(
+                "scope must be empty or contain lowercase letters, digits,"
+                " '.', '_', '/', or '-'"
+            )
+        return scope
+
 
 def _build_prefix(type_: str, scope: str) -> str:
     """Build the commit message prefix (type + scope)."""
     if scope:
         return f"{type_}({scope}): "
     return f"{type_}: "
+
+
+def _truncate_subject(subject: str, max_len: int) -> str:
+    """Truncate a subject at a word boundary when possible."""
+    if len(subject) <= max_len:
+        return subject
+    cut = subject[:max_len]
+    space = cut.rfind(" ")
+    return cut[:space].rstrip() if space > 0 else cut.rstrip()
 
 
 def assemble_message(payload: CommitMessage, config: Config) -> str:
@@ -39,10 +59,7 @@ def assemble_message(payload: CommitMessage, config: Config) -> str:
 
     prefix = _build_prefix(type_, scope)
     max_subject_len = max(1, MAX_SUBJECT_LEN - len(prefix))
-    if len(subject) > max_subject_len:
-        cut = subject[:max_subject_len]
-        space = cut.rfind(" ")
-        subject = cut[:space].rstrip() if space > 0 else cut.rstrip()
+    subject = _truncate_subject(subject, max_subject_len)
     subject = subject or "update project files"
 
     header = prefix + subject
@@ -79,9 +96,6 @@ def build_fallback_message(staged_files: list[str]) -> str:
 
     prefix = _build_prefix(type_, scope)
     max_subject_len = max(1, MAX_SUBJECT_LEN - len(prefix))
-    if len(subject) > max_subject_len:
-        cut = subject[:max_subject_len]
-        space = cut.rfind(" ")
-        subject = cut[:space].rstrip() if space > 0 else cut.rstrip()
+    subject = _truncate_subject(subject, max_subject_len)
     subject = subject or "update project files"
     return prefix + subject

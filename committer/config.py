@@ -6,6 +6,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Literal
 
+from committer.constants import ALLOWED_TYPES, SCOPE_RE
+
 DEFAULT_MODEL = "google/gemini-3.1-flash-lite"
 DEFAULT_REASONING_EFFORT = "none"
 REASONING_EFFORT_CHOICES = ("none", "minimal", "low", "medium", "high", "xhigh")
@@ -91,3 +93,23 @@ class Config:
                 f"invalid reasoning_effort {self.reasoning_effort!r};"
                 f" must be one of: {', '.join(REASONING_EFFORT_CHOICES)}"
             )
+        if self.max_diff_chars < 0:
+            die("max_diff_chars must be >= 0")
+        if self.timeout <= 0:
+            die("timeout must be > 0")
+        if self.bulk_threshold < 0:
+            die("bulk_threshold must be >= 0")
+        if self.type is not None:
+            self.type = self.type.strip()
+            if not self.type or self.type not in ALLOWED_TYPES:
+                die(
+                    f"invalid commit type {self.type!r};"
+                    f" must be one of: {', '.join(sorted(ALLOWED_TYPES))}"
+                )
+        if self.scope is not None:
+            self.scope = self.scope.strip()
+            if self.scope and not SCOPE_RE.match(self.scope):
+                die(
+                    f"invalid commit scope {self.scope!r};"
+                    " use lowercase letters, digits, '.', '_', '/', or '-'"
+                )

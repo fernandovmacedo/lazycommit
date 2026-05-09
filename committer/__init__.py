@@ -31,7 +31,7 @@ from committer.console import (
     out,
     warn,
 )
-from committer.constants import ALLOWED_TYPES, SYSTEM_PROMPT
+from committer.constants import ALLOWED_TYPES, SCOPE_RE, SYSTEM_PROMPT
 from committer.flows import _commit_flow, _print_summary, _rewrite_flow, commit_changes
 from committer.git import (
     auto_stage,
@@ -57,6 +57,7 @@ from committer.rewrite import (
     _apply_filter_repo,
     _build_commit_context,
     _check_filter_repo,
+    _ensure_clean_worktree,
     _get_rewrite_shas,
     _is_conventional,
 )
@@ -100,6 +101,7 @@ __all__ = [
     # Rewrite
     "_is_conventional",
     "_check_filter_repo",
+    "_ensure_clean_worktree",
     "_get_rewrite_shas",
     "_build_commit_context",
     "_apply_filter_repo",
@@ -176,6 +178,28 @@ def _positive_float(value: str) -> float:
     return number
 
 
+def _env_non_negative_int(key: str, default: int) -> int:
+    """Read an environment integer default with the same rules as the CLI."""
+    value = os.environ.get(key)
+    if value is None:
+        return default
+    try:
+        return _non_negative_int(value)
+    except argparse.ArgumentTypeError as exc:
+        die(f"invalid value for {key}: {value!r} ({exc})")
+
+
+def _env_positive_float(key: str, default: float) -> float:
+    """Read an environment float default with the same rules as the CLI."""
+    value = os.environ.get(key)
+    if value is None:
+        return default
+    try:
+        return _positive_float(value)
+    except argparse.ArgumentTypeError as exc:
+        die(f"invalid value for {key}: {value!r} ({exc})")
+
+
 def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) -> None:
     """Add arguments shared by commit and rewrite commands."""
     parser.add_argument(
@@ -237,14 +261,14 @@ def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) 
         "-d",
         "--max-diff-chars",
         type=_non_negative_int,
-        default=int(os.environ.get("COMMITTER_MAX_DIFF_CHARS", "12000")),
+        default=_env_non_negative_int("COMMITTER_MAX_DIFF_CHARS", 12000),
         help="Max diff characters sent to model",
     )
     parser.add_argument(
         "-T",
         "--timeout",
         type=_positive_float,
-        default=float(os.environ.get("COMMITTER_TIMEOUT", "10.0")),
+        default=_env_positive_float("COMMITTER_TIMEOUT", 10.0),
         help="API timeout in seconds",
     )
     parser.add_argument(
@@ -259,7 +283,7 @@ def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) 
             "-B",
             "--bulk-threshold",
             type=_non_negative_int,
-            default=int(os.environ.get("COMMITTER_BULK_THRESHOLD", "50")),
+            default=_env_non_negative_int("COMMITTER_BULK_THRESHOLD", 50),
             help=(
                 "Skip AI when staged files exceed this count "
                 "(0 disables the limit, default: 50)"
@@ -304,6 +328,17 @@ def _parse_commit_args() -> Config:
         parser.error("--fallback cannot be empty or whitespace-only")
     if args.type is not None and not args.type.strip():
         parser.error("--type cannot be empty or whitespace-only")
+    if args.type is not None and args.type.strip() not in ALLOWED_TYPES:
+        parser.error(
+            "--type must be one of: " + ", ".join(sorted(ALLOWED_TYPES))
+        )
+    if args.scope is not None:
+        scope = args.scope.strip()
+        if scope and not SCOPE_RE.match(scope):
+            parser.error(
+                "--scope must be empty or contain lowercase letters, digits,"
+                " '.', '_', '/', or '-'"
+            )
 
     return Config(
         subcommand="commit",
@@ -320,7 +355,7 @@ def _parse_commit_args() -> Config:
         force_ai=args.force_ai,
         directory=args.directory,
         type=args.type,
-        scope=args.scope,
+        scope=args.scope.strip() if args.scope is not None else None,
         context=args.context,
         git_args=tuple(git_args),
         fallback=fallback,

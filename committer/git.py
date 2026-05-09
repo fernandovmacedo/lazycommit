@@ -8,10 +8,8 @@ import tomllib
 from collections.abc import Sequence
 
 from committer.console import warn
-from committer.constants import DIFF_EXCLUDE_PATTERNS
-from committer.logger import log_debug
-
-_GIT_TIMEOUT_S = 30
+from committer.constants import DIFF_EXCLUDE_PATTERNS, GIT_TIMEOUT_S
+from committer.logger import log_debug, log_warning
 
 
 def run_git(*args: str) -> str | None:
@@ -26,10 +24,10 @@ def run_git(*args: str) -> str | None:
             encoding="utf-8",
             errors="replace",
             check=False,
-            timeout=_GIT_TIMEOUT_S,
+            timeout=GIT_TIMEOUT_S,
         )
     except subprocess.TimeoutExpired:
-        log_debug(f"git {label} → timeout after {_GIT_TIMEOUT_S}s")
+        log_debug(f"git {label} → timeout after {GIT_TIMEOUT_S}s")
         return None
     if result.returncode != 0:
         log_debug(f"git {label} → exit {result.returncode}")
@@ -44,7 +42,7 @@ def has_staged_changes() -> bool:
         result = subprocess.run(
             ["git", "diff", "--cached", "--quiet"],
             capture_output=True,
-            timeout=_GIT_TIMEOUT_S,
+            timeout=GIT_TIMEOUT_S,
         )
     except subprocess.TimeoutExpired:
         return False
@@ -56,22 +54,25 @@ def get_repo_root() -> str | None:
     return run_git("rev-parse", "--show-toplevel")
 
 
-def auto_stage(git_args: Sequence[str]) -> None:
+def auto_stage(git_args: Sequence[str]) -> bool:
     """Auto-stage all changes if nothing is staged and not amending."""
     if "--amend" in git_args:
-        return
+        return True
     if has_staged_changes():
-        return
+        return True
     try:
         subprocess.run(
             ["git", "add", "-A"],
             capture_output=True,
             check=False,
-            timeout=_GIT_TIMEOUT_S,
+            timeout=GIT_TIMEOUT_S,
         )
     except subprocess.TimeoutExpired:
-        log_debug(f"git add -A → timeout after {_GIT_TIMEOUT_S}s")
-        return
+        msg = f"git add -A timed out after {GIT_TIMEOUT_S}s"
+        log_warning(msg)
+        warn(f"{msg}; commit was not created")
+        return False
+    return True
 
 
 def get_staged_diff() -> str:

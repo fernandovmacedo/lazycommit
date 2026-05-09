@@ -45,13 +45,14 @@ committer/
 ├── git.py           # all git subprocess ops, load_xdg_config, load_context_file, build_user_context
 ├── api.py           # LiteLLM/OpenRouter client helpers, UsageStats, generate_commit_json  [INFRASTRUCTURE]
 ├── message.py       # CommitMessage model, assemble_message, build_fallback_message
-├── rewrite.py       # _is_conventional, _check_filter_repo, _get_rewrite_shas, _build_commit_context, _apply_filter_repo
+├── rewrite.py       # _is_conventional, _check_filter_repo, _ensure_clean_worktree, _get_rewrite_shas, _build_commit_context, _apply_filter_repo
 └── flows.py         # _commit_flow, _rewrite_flow, commit_changes, _print_summary  [wiring layer]
 ```
 
 Dependency graph (strict DAG, no circular imports):
 ```
-constants  config  console  api  logger  (no internal deps)
+constants  console  api  logger  (no internal deps)
+config     → constants
 git        → constants, console, logger
 message    → constants, config
 rewrite    → constants, git, console
@@ -106,6 +107,7 @@ main()
   ├─ load_xdg_config()           # load ~/.config/committer/config.toml FIRST
   └─ _rewrite_flow()
        ├─ _check_filter_repo()        # verify git-filter-repo is installed
+       ├─ _ensure_clean_worktree()    # require clean worktree for non-dry-run rewrites
        ├─ _get_rewrite_shas()         # collect commits based on mode (all/sha/non-conventional/unpushed)
        ├─ for each commit:
        │    ├─ _build_commit_context()  # diff + current message for context
@@ -148,7 +150,7 @@ Every run writes to `~/.local/state/committer/committer.log` (respects `$XDG_STA
 |---|---|---|
 | `DEBUG` | `git.py` | Every `git` subprocess: command label, start, exit code, stdout size |
 | `INFO` | `flows.py` | Flow start/end with timing, API call timing, auto-stage ops, bulk-change fallback decisions, git commit/push results, rewrite progress per SHA |
-| `WARNING` | `flows.py` | Missing `OPENROUTER_API_KEY` (fallback triggered), meta-timeout fired, git commit failures |
+| `WARNING` | `flows.py`, `git.py` | Missing `OPENROUTER_API_KEY` (fallback triggered), meta-timeout fired, staging timeouts, git commit/push failures |
 | `ERROR` | `flows.py` | API call exceptions (with `exc_info=True` for full traceback) |
 
 **Common log patterns for debugging:**
@@ -197,6 +199,7 @@ The `rewrite` subcommand uses `git-filter-repo` (external dependency) to batch-r
 - **`<SHA>`**: Rewrite from a specific commit to HEAD
 
 Rewriting sends each commit's diff and original message to the API, then applies all changes in a single `git filter-repo` pass.
+Non-dry-run rewrites require a clean worktree before SHA collection or API calls begin.
 
 ## Configuration
 
@@ -231,4 +234,4 @@ Optional `.committer.md` in the repo root injects project-specific context into 
 
 ## Testing
 
-Tests are in `tests/test_committer.py` (87 tests currently). All subprocess and AI client calls are mocked — no network or real git calls occur. Tests cover message assembly, fallback logic, diff truncation, context loading, staging behavior, API integration, usage stats, bulk-change detection, rewrite flow, parser behavior, and end-to-end `main()` flows.
+Tests are in `tests/test_committer.py` (150 tests currently). All subprocess and AI client calls are mocked — no network or real git calls occur. Tests cover message assembly, fallback logic, diff truncation, context loading, staging behavior, API integration, usage stats, bulk-change detection, rewrite flow, parser behavior, timeout handling, and end-to-end `main()` flows.
