@@ -1,4 +1,4 @@
-"""Commit history rewriting functionality."""
+"""Helpers for selecting and rewriting commit history."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def _is_conventional(message: str) -> bool:
 
 
 def _check_filter_repo() -> None:
-    """Verify git-filter-repo is installed."""
+    """Verify that ``git filter-repo`` is available before rewriting."""
     try:
         result = subprocess.run(
             ["git", "filter-repo", "--version"],
@@ -40,7 +40,7 @@ def _check_filter_repo() -> None:
 
 
 def _ensure_clean_worktree() -> None:
-    """Require a clean worktree before rewriting history."""
+    """Require a clean worktree before non-dry-run history rewrites."""
     status = run_git("status", "--porcelain")
     if status is None:
         die("cannot determine worktree status before rewrite")
@@ -57,7 +57,7 @@ def _get_rewrite_shas(
     non_conventional: bool,
     unpushed: bool,
 ) -> list[str]:
-    """Get list of commit SHAs to rewrite based on mode."""
+    """Return the ordered commit SHAs selected for rewriting."""
     if sha:
         try:
             ranged = subprocess.run(
@@ -115,7 +115,7 @@ def _get_rewrite_shas(
 
 
 def _build_commit_context(sha: str, branch: str, max_diff_chars: int) -> str:
-    """Build context for rewriting a specific commit."""
+    """Build the AI prompt context for rewriting a specific commit."""
     current_msg = run_git("show", "-s", "--format=%B", sha) or ""
     diff_raw = run_git(
         "show", sha, "--", ".", *DIFF_EXCLUDE_PATTERNS
@@ -142,7 +142,7 @@ def _build_commit_context(sha: str, branch: str, max_diff_chars: int) -> str:
 
 
 def _apply_filter_repo(message_map: dict[str, str]) -> None:
-    """Apply commit message rewrites using git-filter-repo."""
+    """Apply all rewritten commit messages in one ``git filter-repo`` pass."""
     encoded_map = {
         sha: base64.b64encode((message.rstrip() + "\n").encode("utf-8")).decode("ascii")
         for sha, message in message_map.items()

@@ -1,4 +1,4 @@
-"""Main workflow orchestration for commit and rewrite operations."""
+"""Top-level orchestration for commit and rewrite command flows."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ from committer.rewrite import (
 )
 
 # Meta-timeout constants for the OS-level alarm that prevents hung AI calls.
-# The multiplier accounts for max_retries=1 in api.py (up to 2 attempts).
+# The multiplier accounts for ``max_retries=1`` in ``api.py`` (up to 2 attempts).
 _META_TIMEOUT_MULTIPLIER = 2
 _META_TIMEOUT_OVERHEAD_S = 5  # seconds buffer for retries and overhead
 _HAS_SIGALRM = hasattr(signal, "SIGALRM")
@@ -114,7 +114,7 @@ class _ApiMetaTimeout:
 
 
 def commit_changes(message: str, git_args: tuple[str, ...]) -> int:
-    """Commit changes with the given message."""
+    """Run ``git commit`` with the supplied message and passthrough args."""
     try:
         result = subprocess.run(
             ["git", "commit", *git_args, "-F", "-"],
@@ -142,7 +142,7 @@ def _print_summary(elapsed: float, usage_stats: UsageStats | None) -> None:
 
 
 def _commit_flow(config: Config) -> int:
-    """Execute the commit workflow, including heuristic fallback paths."""
+    """Execute the commit workflow, including deterministic fallback paths."""
     from committer.console import die
 
     start = time.perf_counter()

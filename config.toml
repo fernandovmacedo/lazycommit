@@ -1,5 +1,15 @@
+# OpenRouter model slug used for commit and rewrite requests.
 # model = "google/gemini-3.1-flash-lite"
+#
+# Reasoning effort: none, minimal, low, medium, high, or xhigh.
 # reasoning_effort = "none"
+#
+# Maximum diff characters sent to the model. Use 0 to omit the diff.
 # max_diff_chars = 12000
+#
+# Per-call API timeout in seconds. Must be greater than 0.
 # timeout = 10.0
+#
+# Commit flow only: skip AI when staged files exceed this count.
+# Use 0 to disable the bulk-change guardrail.
 # bulk_threshold = 50

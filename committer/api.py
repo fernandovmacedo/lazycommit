@@ -1,4 +1,4 @@
-"""LiteLLM/OpenRouter client helpers and usage statistics."""
+"""OpenRouter client helpers and token-usage accounting."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ litellm.suppress_debug_info = True  # Silence the LiteLLM startup banner.
 
 
 class UsageStats:
-    """Container for API usage statistics."""
+    """Mutable container for usage and cost data from model calls."""
 
     def __init__(
         self,
@@ -110,7 +110,7 @@ def generate_commit_json(
     user_context: str,
     timeout: float,
 ) -> tuple[BaseModel, UsageStats | None]:
-    """Generate a structured commit message via OpenRouter."""
+    """Generate structured commit data through OpenRouter."""
     client = instructor.from_litellm(
         litellm.completion,
         mode=instructor.Mode.OPENROUTER_STRUCTURED_OUTPUTS,

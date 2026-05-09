@@ -1,9 +1,9 @@
 """
-Committer - AI-powered git commit message generator.
+Committer CLI for AI-assisted Conventional Commit generation and rewrites.
 
-This package provides a CLI for generating Conventional Commit messages
-via OpenRouter-backed structured outputs, with deterministic fallback when the
-AI path is unavailable.
+This package provides a CLI for generating Conventional Commit messages and
+rewriting existing history via OpenRouter-backed structured outputs, with a
+deterministic fallback when the AI path is unavailable.
 """
 
 from __future__ import annotations
@@ -117,7 +117,7 @@ __all__ = [
 
 # Backward compatibility shims kept for tests and older imports.
 class ParsedArgs(argparse.Namespace):
-    """Deprecated: Use Config instead."""
+    """Deprecated parser namespace kept for tests and older imports."""
     dry_run: bool
     push: bool
     silent: bool
@@ -134,7 +134,7 @@ class ParsedArgs(argparse.Namespace):
 
 
 class ParsedRewriteArgs(argparse.Namespace):
-    """Deprecated: Use Config instead."""
+    """Deprecated rewrite parser namespace kept for tests and older imports."""
     sha: str | None
     all_commits: bool
     non_conventional: bool
@@ -229,7 +229,12 @@ def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) 
             else "Run git push after a successful commit"
         ),
     )
-    parser.add_argument("-q", "--silent", action="store_true", help="No stdout output")
+    parser.add_argument(
+        "-q",
+        "--silent",
+        action="store_true",
+        help="Suppress stdout output",
+    )
     parser.add_argument(
         "-v",
         "--verbose",
@@ -240,7 +245,7 @@ def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) 
         "-m",
         "--model",
         default=os.environ.get("COMMITTER_MODEL", DEFAULT_MODEL),
-        help="OpenRouter model",
+        help="OpenRouter model slug",
     )
     parser.add_argument(
         "-r",
@@ -255,28 +260,28 @@ def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) 
         "-b",
         "--no-body",
         action="store_true",
-        help="Strip commit body",
+        help="Omit the commit body",
     )
     parser.add_argument(
         "-d",
         "--max-diff-chars",
         type=_non_negative_int,
         default=_env_non_negative_int("COMMITTER_MAX_DIFF_CHARS", 12000),
-        help="Max diff characters sent to model",
+        help="Maximum diff characters sent to the model",
     )
     parser.add_argument(
         "-T",
         "--timeout",
         type=_positive_float,
         default=_env_positive_float("COMMITTER_TIMEOUT", 10.0),
-        help="API timeout in seconds",
+        help="Per-call API timeout in seconds",
     )
     parser.add_argument(
         "-f",
         "--fallback",
         metavar="MESSAGE",
         default=None,
-        help="Custom fallback commit message when AI generation fails",
+        help="Fallback message to use when AI generation fails",
     )
     if not rewrite:
         parser.add_argument(
@@ -300,7 +305,8 @@ def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) 
 def _parse_commit_args() -> Config:
     """Parse arguments for the commit subcommand."""
     parser = argparse.ArgumentParser(
-        prog="committer", description="AI-powered git commit message generator"
+        prog="committer",
+        description="Generate Conventional Commit messages and run git commit",
     )
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
@@ -308,7 +314,7 @@ def _parse_commit_args() -> Config:
     _add_common_args(parser)
     parser.add_argument("-t", "--type", help="Override commit type")
     parser.add_argument("-s", "--scope", help="Override commit scope")
-    parser.add_argument("-c", "--context", help="Path to context file")
+    parser.add_argument("-c", "--context", help="Path to an extra context file")
     parser.add_argument(
         "git_args",
         nargs=argparse.REMAINDER,
@@ -366,12 +372,12 @@ def _parse_rewrite_args() -> Config:
     """Parse arguments for the rewrite subcommand."""
     parser = argparse.ArgumentParser(
         prog="committer rewrite",
-        description="Rewrite commit messages into Conventional Commit format",
+        description="Rewrite commit history into Conventional Commit format",
     )
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
     )
-    parser.add_argument("sha", nargs="?", help="Rewrite from this SHA to HEAD")
+    parser.add_argument("sha", nargs="?", help="Rewrite from this SHA through HEAD")
     parser.add_argument(
         "-a",
         "--all",
@@ -389,7 +395,7 @@ def _parse_rewrite_args() -> Config:
         "-u",
         "--unpushed",
         action="store_true",
-        help="Rewrite commits not yet pushed to upstream",
+        help="Rewrite commits not yet pushed to the upstream branch",
     )
     _add_common_args(parser, rewrite=True)
 

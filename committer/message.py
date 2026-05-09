@@ -1,4 +1,4 @@
-"""Message parsing, validation, and assembly utilities."""
+"""Structured commit-message validation and fallback assembly helpers."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from committer.constants import MAX_SUBJECT_LEN, SCOPE_RE
 
 
 class CommitMessage(BaseModel):
-    """Structured commit message from the LLM."""
+    """Structured commit message returned by the model."""
 
     type: Literal[
         "build", "chore", "ci", "docs", "feat", "fix",
@@ -51,7 +51,7 @@ def _truncate_subject(subject: str, max_len: int) -> str:
 
 
 def assemble_message(payload: CommitMessage, config: Config) -> str:
-    """Assemble a commit message from the validated CommitMessage payload."""
+    """Assemble the final commit message from validated model output."""
     type_ = config.type if config.type is not None else payload.type
     scope = config.scope if config.scope is not None else payload.scope
     subject = payload.subject.strip()
@@ -69,7 +69,7 @@ def assemble_message(payload: CommitMessage, config: Config) -> str:
 
 
 def build_fallback_message(staged_files: list[str]) -> str:
-    """Build a deterministic fallback message from staged files."""
+    """Build a deterministic Conventional Commit from staged file paths."""
     if not staged_files:
         return "chore: update project files"
 

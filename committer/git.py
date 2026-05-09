@@ -1,4 +1,4 @@
-"""Git subprocess operations and context building."""
+"""Git subprocess helpers, XDG config loading, and prompt context assembly."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def get_repo_root() -> str | None:
 
 
 def auto_stage(git_args: Sequence[str]) -> bool:
-    """Auto-stage all changes if nothing is staged and not amending."""
+    """Stage all changes only when nothing is staged and ``--amend`` is absent."""
     if "--amend" in git_args:
         return True
     if has_staged_changes():
@@ -160,7 +160,7 @@ def load_xdg_config() -> None:
 
 
 def load_context_file(path: str | None, repo_root: str) -> str:
-    """Load context from a file, trying explicit path or .committer.md."""
+    """Load context from an explicit file or fall back to ``.committer.md``."""
     candidates = [path] if path else []
     candidates.append(os.path.join(repo_root, ".committer.md"))
 
@@ -183,7 +183,7 @@ def load_context_file(path: str | None, repo_root: str) -> str:
 
 
 def truncate_diff(diff: str, max_chars: int) -> tuple[str, bool]:
-    """Truncate diff at line boundary if needed. Returns (diff, was_truncated)."""
+    """Truncate a diff at a line boundary and return ``(diff, was_truncated)``."""
     if len(diff) <= max_chars:
         return diff, False
 
@@ -203,7 +203,7 @@ def build_user_context(
     staged_diff: str,
     truncated: bool,
 ) -> str:
-    """Build the user context string for the AI prompt."""
+    """Build the user message sent to the structured-output model."""
     recent = recent_commits or "(none - new repository)"
     staged_files_block = "\n".join(staged_files) if staged_files else "(none)"
     stat_block = staged_stat or "(none)"

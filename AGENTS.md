@@ -4,7 +4,7 @@ This file provides guidance to AI Agents when working with code in this reposito
 
 ## Project Purpose
 
-**Committer** is a Python CLI tool that auto-stages git changes, generates Conventional Commit messages through OpenRouter-backed structured outputs, and commits in one command. It also includes a `rewrite` subcommand for batch-rewriting history into Conventional Commit format. When AI generation is unavailable, invalid, timed out, or intentionally skipped for bulk changes, it falls back to a deterministic message generator so the command still completes.
+**Committer** is a Python CLI that stages changes, generates Conventional Commit messages through OpenRouter-backed structured outputs, and commits in one command. It also includes a `rewrite` subcommand for batch-rewriting history into Conventional Commit format. When AI generation is unavailable, invalid, timed out, or intentionally skipped for bulk changes, it falls back to a deterministic message generator so the command still completes.
 
 ## Commands
 
@@ -128,7 +128,7 @@ main()
 - **Diff truncated at line boundaries.** A 12k character limit (`COMMITTER_MAX_DIFF_CHARS`) is applied at the nearest newline to avoid partial diffs.
 - **Bulk-change guardrail.** When staged files exceed `COMMITTER_BULK_THRESHOLD` (default `50`), the commit flow skips AI and uses the deterministic fallback unless `--force-ai` is set.
 - **Usage tracking.** Every API call captures prompt/completion tokens, cached tokens, reasoning tokens, and cost; printed in execution summary.
-- **Silent mode.** `-S, --silent` suppresses stdout while still showing warnings/errors on stderr.
+- **Silent mode.** `-q, --silent` suppresses stdout while still showing warnings/errors on stderr.
 - **Verbose mode.** `-v, --verbose` prints model details, prompt context, diff content, and raw structured responses for debugging.
 
 ### Logging and debugging
@@ -166,7 +166,7 @@ Every run writes to `~/.local/state/committer/committer.log` (respects `$XDG_STA
 |---|---|
 | (default) | Normal output: commit message, summary, warnings |
 | `-v, --verbose` | Adds: model name, diff content, full API request (system prompt + user context), structured response, timing |
-| `-S, --silent` | Suppresses all stdout. Warnings and errors still appear on stderr. Verbose output is also suppressed. |
+| `-q, --silent` | Suppresses all stdout. Warnings and errors still appear on stderr. Verbose output is also suppressed. |
 
 Verbose output is gated by `not config.silent and config.verbose`. The `_print_verbose_request()` and `_print_verbose_response()` helpers in `console.py` use Rich panels with syntax highlighting.
 
@@ -206,11 +206,20 @@ Non-dry-run rewrites require a clean worktree before SHA collection or API calls
 XDG config file at `~/.config/committer/config.toml` (or `$XDG_CONFIG_HOME/committer/config.toml`):
 
 ```toml
-# ~/.config/committer/config.toml
+# OpenRouter model slug used for commit and rewrite requests.
 model = "google/gemini-3.1-flash-lite"
+
+# Reasoning effort: none, minimal, low, medium, high, or xhigh.
 reasoning_effort = "none"
+
+# Maximum diff characters sent to the model. Use 0 to omit the diff.
 max_diff_chars = 12000
+
+# Per-call API timeout in seconds. Must be greater than 0.
 timeout = 10.0
+
+# Commit flow only: skip AI when staged files exceed this count.
+# Use 0 to disable the bulk-change guardrail.
 bulk_threshold = 50
 ```
 
@@ -234,4 +243,4 @@ Optional `.committer.md` in the repo root injects project-specific context into 
 
 ## Testing
 
-Tests are in `tests/test_committer.py` (150 tests currently). All subprocess and AI client calls are mocked — no network or real git calls occur. Tests cover message assembly, fallback logic, diff truncation, context loading, staging behavior, API integration, usage stats, bulk-change detection, rewrite flow, parser behavior, timeout handling, and end-to-end `main()` flows.
+Tests live in `tests/test_committer.py`. All subprocess and AI client calls are mocked, so the suite does not require network access or a real git repository. Coverage includes message assembly, fallback logic, diff truncation, context loading, staging behavior, API integration, usage stats, bulk-change detection, rewrite flow, parser behavior, timeout handling, and end-to-end `main()` flows.

@@ -1,4 +1,4 @@
-"""Console output utilities with Rich support."""
+"""Rich-backed stdout/stderr helpers and verbose debug printers."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.text import Text
 
-# Singleton consoles for stdout and stderr
+# Shared stdout and stderr consoles used across the CLI.
 _STDOUT = Console(markup=False, highlight=False, soft_wrap=True)
 _STDERR = Console(stderr=True, markup=False, highlight=False, soft_wrap=True)
 
@@ -44,7 +44,7 @@ def _print_verbose_request(
     system_prompt: str,
     user_context: str,
 ) -> None:
-    """Print verbose request details for debugging."""
+    """Print the outgoing prompt payload for verbose debugging."""
     _STDOUT.rule("--- request ---")
     _STDOUT.print(Text(diff_info, style="cyan"))
     if context_path:
@@ -58,7 +58,7 @@ def _print_verbose_request(
 
 
 def _print_verbose_response(raw_response: str) -> None:
-    """Print verbose response details for debugging."""
+    """Print the raw structured response for verbose debugging."""
     _STDOUT.rule("--- response ---")
     payload = raw_response.strip()
     try:

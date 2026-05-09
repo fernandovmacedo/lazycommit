@@ -1825,6 +1825,43 @@ def test_rewrite_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
     assert capsys.readouterr().out.strip() == "committer rewrite 1.0.0"
 
 
+def test_commit_help_text_mentions_current_flags(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sys.argv = ["committer", "--help"]
+
+    with pytest.raises(SystemExit) as exc:
+        committer.parse_args()
+
+    out = capsys.readouterr().out
+    assert exc.value.code == 0
+    assert "-q, --silent" in out
+    assert "-S, --silent" not in out
+    assert "Suppress stdout output" in out
+    assert "-B, --bulk-threshold BULK_THRESHOLD" in out
+    assert "-F, --force-ai" in out
+    assert "Path to an extra context file" in out
+
+
+def test_rewrite_help_text_mentions_current_flags(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sys.argv = ["committer", "rewrite", "--help"]
+
+    with pytest.raises(SystemExit) as exc:
+        committer.parse_args()
+
+    out = capsys.readouterr().out
+    assert exc.value.code == 0
+    assert "-q, --silent" in out
+    assert "-S, --silent" not in out
+    assert "Rewrite commit history into Conventional Commit format" in out
+    assert "Push rewritten history with --force-with-lease after" in out
+    assert "rewrite" in out
+    assert "--bulk-threshold" not in out
+    assert "--force-ai" not in out
+
+
 def test_logger_falls_back_to_nullhandler(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

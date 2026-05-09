@@ -1,7 +1,8 @@
 """Persistent file logger for post-mortem debugging of hangs and errors.
 
 Writes to ~/.local/state/committer/committer.log (XDG_STATE_HOME aware).
-Rotates at 2 MB, keeps 3 backups. Never raises — failures silently no-op.
+Rotates at 2 MB, keeps 3 backups. Never raises; setup failures fall back to a
+NullHandler so commit flows still proceed.
 """
 
 from __future__ import annotations

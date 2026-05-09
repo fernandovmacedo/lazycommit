@@ -1,7 +1,7 @@
 [project]
 name = "committer"
 version = "1.0.0"
-description = "AI-powered git commit message generator with Conventional Commits"
+description = "AI-assisted git commit and history rewrite CLI for Conventional Commits"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Fernando V Macedo", email = "fernandovmacedo@gmail.com" }]

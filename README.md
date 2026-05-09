@@ -1,23 +1,22 @@
 # committer
 
-AI-powered git commit message generator that auto-stages, generates a Conventional Commit message, and commits immediately. It also includes a `rewrite` subcommand for rewriting existing history into Conventional Commit format.
+`committer` is a Python CLI that stages changes, generates a Conventional Commit message through OpenRouter structured outputs, and runs `git commit` in one command. It also includes a `rewrite` subcommand for batch-rewriting existing history into Conventional Commit format.
+
+When AI generation is unavailable, times out, returns invalid structured output, or is skipped for bulk changes, `committer` falls back to a deterministic message generator so the command still completes.
 
 ## Features
 
-- Smart staging: preserves partial staging; otherwise runs `git add -A`
-- Conventional Commit output (`feat:`, `fix:`, and related types)
-- Deterministic fallback when AI is unavailable, times out, or returns invalid output
-- Custom fallback message support with `--fallback`
-- Bulk-change guardrail with `--bulk-threshold` and `--force-ai`
-- `--dry-run` preview mode for both commit and rewrite flows
-- Clean-worktree guard before destructive history rewrites
-- Optional `--push` after commit or `--force-with-lease` after rewrite
-- Token, cached-token, reasoning-token, and cost reporting
-- XDG config support (`~/.config/committer/config.toml`)
-- Optional `.committer.md` prompt context injection
-- Silent mode for scripting (`-S, --silent`)
-- Verbose mode for debugging (`-v, --verbose`)
-- Rich-backed stdout/stderr handling
+- Auto-staging that preserves partial staging and skips `git add -A` for `--amend`
+- Conventional Commit output with optional `--type` and `--scope` overrides
+- Deterministic fallback with optional `--fallback MESSAGE`
+- Bulk-change guardrail via `--bulk-threshold` and `--force-ai`
+- `--dry-run` preview mode for both commit and rewrite workflows
+- Optional `--push` after commit or `git push --force-with-lease` after rewrite
+- Clean-worktree protection before non-dry-run history rewrites
+- XDG config loading from `~/.config/committer/config.toml`
+- Optional `.committer.md` or `--context FILE` prompt injection
+- Summary output with elapsed time, token usage, cached tokens, reasoning tokens, and cost when available
+- `-q, --silent` for script-friendly stdout suppression and `-v, --verbose` for prompt/response debugging
 
 ## Install
 
@@ -25,13 +24,13 @@ AI-powered git commit message generator that auto-stages, generates a Convention
 uv tool install --editable .
 ```
 
-Or run without installing:
+Run without installing:
 
 ```bash
 uv run python -m committer --dry-run
 ```
 
-Tip: if can use `gg` as a shell alias for quick commits:
+Optional shell alias:
 
 ```bash
 alias gg='committer'
@@ -39,82 +38,73 @@ alias gg='committer'
 
 ## Usage
 
-### Commit command
+### Commit workflow
 
 ```bash
 committer [options] [-- <git-commit-args>]
 ```
 
-Options:
+Common options:
 
-- `-C, --directory DIR` change to `DIR` before running
-- `-n, --dry-run` generate and print the message without committing
+- `-C, --directory DIR` run inside `DIR` first, similar to `git -C`
+- `-n, --dry-run` print the generated message without committing
 - `-p, --push` run `git push` after a successful commit
-- `-q, --silent` suppress stdout output
-- `-v, --verbose` show model, prompt context, diff, and API details
-- `-m, --model MODEL` OpenRouter model to use
-- `-r, --reasoning-effort LEVEL` reasoning control for OpenRouter (default `none`)
-- `-b, --no-body` strip the commit body
-- `-d, --max-diff-chars N` maximum diff characters sent to the model (default `12000`)
-- `-T, --timeout SECS` API timeout in seconds (default `10.0`)
-- `-f, --fallback MESSAGE` use a custom fallback message when AI generation fails
-- `-B, --bulk-threshold N` skip AI when staged files exceed `N` (`0` disables the limit, default `50`)
-- `-F, --force-ai` force AI generation even when the bulk threshold is exceeded
-- `-t, --type TYPE` override the commit type
-- `-s, --scope SCOPE` override the commit scope
-- `-c, --context FILE` prepend a context file to the AI prompt
+- `-q, --silent` suppress stdout; warnings and errors still go to stderr
+- `-v, --verbose` show model choice, prompt context, diff details, and structured responses
+- `-m, --model MODEL` choose the OpenRouter model slug
+- `-r, --reasoning-effort LEVEL` set reasoning effort: `none`, `minimal`, `low`, `medium`, `high`, or `xhigh`
+- `-b, --no-body` omit the commit body
+- `-d, --max-diff-chars N` cap diff characters sent to the model; `0` means send no diff
+- `-T, --timeout SECONDS` set the per-call API timeout
+- `-f, --fallback MESSAGE` use this message when AI generation falls back
+- `-B, --bulk-threshold N` skip AI when staged files exceed `N`; `0` disables the limit
+- `-F, --force-ai` bypass the bulk-change guardrail
+- `-t, --type TYPE` force a Conventional Commit type
+- `-s, --scope SCOPE` force a scope using lowercase letters, digits, `.`, `_`, `/`, or `-`
+- `-c, --context FILE` load additional prompt context from a file
 
-Pass extra `git commit` flags after `--`:
+Pass raw `git commit` flags after `--`:
 
 ```bash
 committer -- --no-verify
 committer -- --amend
 ```
 
-If the staged file count is above `--bulk-threshold`, committer skips the AI call and uses the deterministic fallback message unless `--force-ai` is set.
+If staged files exceed `--bulk-threshold`, `committer` skips the AI request and uses the deterministic fallback unless `--force-ai` is set.
 
-### Rewrite subcommand
-
-Rewrite existing commit messages into Conventional Commit format:
+### Rewrite workflow
 
 ```bash
 committer rewrite [options] [SHA]
 ```
 
-Modes (mutually exclusive):
+Modes are mutually exclusive:
 
-- (default) `-N, --non-conventional` rewrite only commits whose first line is not already a Conventional Commit
-- `-a, --all` rewrite the full history
-- `-u, --unpushed` rewrite commits in `@{u}..HEAD`
-- `SHA` rewrite from that commit through `HEAD`
+- default `-N, --non-conventional`: rewrite only commits whose subject line is not already Conventional Commit formatted
+- `-a, --all`: rewrite the full history
+- `-u, --unpushed`: rewrite commits in `@{u}..HEAD`
+- `SHA`: rewrite from that commit through `HEAD`
 
-Options:
+Rewrite options:
 
-- `-C, --directory DIR` change to `DIR` before running
+- `-C, --directory DIR` run inside `DIR` first
 - `-n, --dry-run` preview rewritten messages without changing history
-- `-p, --push` run `git push --force-with-lease` after rewrite
-- `-q, --silent` suppress stdout output
-- `-v, --verbose` show model, prompt context, diff, and API details
-- `-m, --model MODEL` OpenRouter model to use
-- `-r, --reasoning-effort LEVEL` reasoning control for OpenRouter (default `none`)
-- `-b, --no-body` strip commit bodies in rewritten messages
-- `-d, --max-diff-chars N` maximum diff characters sent to the model
-- `-T, --timeout SECS` API timeout in seconds
-- `-f, --fallback MESSAGE` use a custom fallback message when AI generation fails
+- `-p, --push` run `git push --force-with-lease` after rewriting
+- `-q, --silent` suppress stdout; warnings and errors still go to stderr
+- `-v, --verbose` show model choice, prompt context, diff details, and structured responses
+- `-m, --model MODEL` choose the OpenRouter model slug
+- `-r, --reasoning-effort LEVEL` set reasoning effort
+- `-b, --no-body` omit rewritten commit bodies
+- `-d, --max-diff-chars N` cap diff characters sent to the model
+- `-T, --timeout SECONDS` set the per-call API timeout
+- `-f, --fallback MESSAGE` use this message whenever a rewrite falls back from AI generation
 
 Examples:
 
 ```bash
-# Preview rewriting only non-conventional commits
 committer rewrite -n
-
-# Rewrite commits that have not been pushed yet
 committer rewrite -u
-
-# Rewrite all commits and force-push
 committer rewrite -a -p
-
-# Rewrite from a specific commit
 committer rewrite abc123
 ```
 
@@ -126,28 +116,37 @@ pip install git-filter-repo
 # or: brew install git-filter-repo
 ```
 
-Non-dry-run rewrites require a clean worktree. Commit, stash, or discard local changes before running `committer rewrite` without `--dry-run`.
+Non-dry-run rewrites require a clean worktree before commit collection begins.
 
 ## Configuration
 
-Create a config file at `~/.config/committer/config.toml`:
+Create `~/.config/committer/config.toml` or `$XDG_CONFIG_HOME/committer/config.toml`:
 
 ```toml
-# ~/.config/committer/config.toml
+# OpenRouter model slug used for commit and rewrite requests.
 # model = "google/gemini-3.1-flash-lite"
+#
+# Reasoning effort: none, minimal, low, medium, high, or xhigh.
 # reasoning_effort = "none"
+#
+# Maximum diff characters sent to the model. Use 0 to omit the diff.
 # max_diff_chars = 12000
+#
+# Per-call API timeout in seconds. Must be greater than 0.
 # timeout = 10.0
+#
+# Commit flow only: skip AI when staged files exceed this count.
+# Use 0 to disable the bulk-change guardrail.
 # bulk_threshold = 50
 ```
 
-Set the API key in your shell environment instead:
+Set the API key in your environment instead of the config file:
 
 ```bash
 export OPENROUTER_API_KEY="sk-or-your-key-here"
 ```
 
-Or use `$XDG_CONFIG_HOME/committer/config.toml` if `XDG_CONFIG_HOME` is set.
+Config precedence is CLI flag > environment variable > XDG config > hardcoded default.
 
 | TOML key | Environment variable |
 |---|---|
@@ -157,11 +156,9 @@ Or use `$XDG_CONFIG_HOME/committer/config.toml` if `XDG_CONFIG_HOME` is set.
 | `timeout` | `COMMITTER_TIMEOUT` |
 | `bulk_threshold` | `COMMITTER_BULK_THRESHOLD` |
 
-Precedence: CLI flag > environment variable > XDG config > hardcoded default.
-
 ## Context Injection
 
-If `.committer.md` exists at the repo root, its contents are prepended to the AI prompt. Override that path with `--context path/to/file.md`.
+If `.committer.md` exists at the repository root, its contents are prepended to the generated user prompt. Use `--context path/to/file.md` to point at a different UTF-8 file.
 
 ## Quality Checks
 
@@ -171,9 +168,7 @@ uv run --group dev ruff check committer/ tests/
 uv run --group dev mypy committer/
 ```
 
-## Dependencies
-
-Runtime dependencies:
+## Runtime Dependencies
 
 - `litellm`
 - `instructor`
