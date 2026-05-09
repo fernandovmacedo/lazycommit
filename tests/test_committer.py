@@ -1856,7 +1856,8 @@ def test_commit_help_text_mentions_current_flags(
     assert "-q, --silent" in out
     assert "-S, --silent" not in out
     assert "Suppress stdout output" in out
-    assert "-B, --bulk-threshold BULK_THRESHOLD" in out
+    assert "--bulk-threshold BULK_THRESHOLD" in out
+    assert "-B BULK_THRESHOLD" in out
     assert "-F, --force-ai" in out
     assert "Path to an extra context file" in out
 
