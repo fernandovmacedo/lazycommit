@@ -144,6 +144,25 @@ def test_assemble_message_truncates_header_to_72() -> None:
     assert len(msg.split("\n", 1)[0]) <= 72
 
 
+def test_assemble_message_truncates_at_word_boundary() -> None:
+    msg = committer.assemble_message(
+        CommitMessage(
+            type="feat",
+            scope="long-scope-name",
+            subject=(
+                "add function documentation for argument parsing behavior"
+                " across interactive terminal workflows"
+            ),
+            body="",
+        ),
+        parsed_args(),
+    )
+    assert len(msg) <= 72
+    assert msg == (
+        "feat(long-scope-name): add function documentation for argument parsing"
+    )
+
+
 def test_build_fallback_empty() -> None:
     assert committer.build_fallback_message([]) == "chore: update project files"
 
@@ -177,6 +196,13 @@ def test_build_fallback_header_fits_72() -> None:
     assert len(msg) <= 72
 
 
+def test_build_fallback_truncates_at_word_boundary() -> None:
+    msg = committer.build_fallback_message(
+        ["M\tsrc/api.py", "M\tsrc/cli.py", "M\tsrc/config.py"]
+    )
+    assert msg == "chore(src): update src with staged changes"
+
+
 def test_truncate_diff_short() -> None:
     diff = "line1\nline2"
     out, truncated = committer.truncate_diff(diff, 12000)
@@ -190,6 +216,13 @@ def test_truncate_diff_long() -> None:
     assert truncated is True
     assert len(out) <= 30
     assert not out.endswith("\n")
+
+
+def test_truncate_diff_preserves_trailing_spaces() -> None:
+    diff = "keep  \nnext line\n"
+    out, truncated = committer.truncate_diff(diff, len("keep  \nnext"))
+    assert truncated is True
+    assert out == "keep  "
 
 
 def test_load_context_file_explicit(tmp_path: Path) -> None:
@@ -206,6 +239,40 @@ def test_load_context_file_auto_discovery(tmp_path: Path) -> None:
 
 def test_load_context_file_missing(tmp_path: Path) -> None:
     assert committer.load_context_file(None, str(tmp_path)) == ""
+
+
+def test_load_context_file_invalid_utf8_warns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    f = tmp_path / "ctx.md"
+    f.write_bytes(b"\xff")
+    warnings: list[str] = []
+    monkeypatch.setattr(git_module, "warn", lambda msg: warnings.append(msg))
+
+    assert committer.load_context_file(str(f), str(tmp_path)) == ""
+    assert warnings == [
+        f"cannot read context file {f}: not valid UTF-8 (invalid start byte)"
+    ]
+
+
+def test_load_context_file_oserror_warns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    f = tmp_path / "ctx.md"
+    warnings: list[str] = []
+    monkeypatch.setattr(git_module, "warn", lambda msg: warnings.append(msg))
+
+    real_open = open
+
+    def fake_open(path: object, *args: object, **kwargs: object) -> object:
+        if str(path) == str(f):
+            raise PermissionError(13, "permission denied", str(f))
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", fake_open)
+
+    assert committer.load_context_file(str(f), str(tmp_path)) == ""
+    assert warnings == [f"cannot read context file {f}: permission denied"]
 
 
 def test_load_context_file_explicit_takes_priority(tmp_path: Path) -> None:
@@ -255,12 +322,30 @@ def test_run_git_uses_replace_for_invalid_utf8(
     assert captured_kwargs["errors"] == "replace"
 
 
+def test_run_git_timeout_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_run(*args: object, **kwargs: object) -> SimpleNamespace:
+        raise git_module.subprocess.TimeoutExpired(cmd=["git"], timeout=30)
+
+    monkeypatch.setattr(git_module.subprocess, "run", fake_run)
+    assert committer.run_git("status") is None
+
+
 def test_has_staged_changes_false(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         git_module.subprocess,
         "run",
         lambda *a, **k: SimpleNamespace(returncode=0),
     )
+    assert committer.has_staged_changes() is False
+
+
+def test_has_staged_changes_timeout_returns_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run(*args: object, **kwargs: object) -> SimpleNamespace:
+        raise git_module.subprocess.TimeoutExpired(cmd=["git"], timeout=30)
+
+    monkeypatch.setattr(git_module.subprocess, "run", fake_run)
     assert committer.has_staged_changes() is False
 
 
@@ -290,6 +375,20 @@ def test_auto_stage_skips_when_already_staged(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(git_module.subprocess, "run", fake_run)
     committer.auto_stage([])
     assert ["git", "add", "-A"] not in calls
+
+
+def test_auto_stage_timeout_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **kwargs: object) -> SimpleNamespace:
+        calls.append(cmd)
+        if cmd[:3] == ["git", "diff", "--cached"]:
+            return SimpleNamespace(returncode=0)
+        raise git_module.subprocess.TimeoutExpired(cmd=cmd, timeout=30)
+
+    monkeypatch.setattr(git_module.subprocess, "run", fake_run)
+    committer.auto_stage([])
+    assert ["git", "add", "-A"] in calls
 
 
 def test_generate_commit_json_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -717,6 +816,30 @@ def test_config_invalid_env_var(
     assert "invalid value for COMMITTER_MAX_DIFF_CHARS" in capsys.readouterr().err
 
 
+def test_config_empty_model_rejected(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("COMMITTER_MODEL", "")
+
+    with pytest.raises(SystemExit) as exc:
+        Config(subcommand="commit")
+
+    assert exc.value.code == 1
+    assert "model cannot be empty" in capsys.readouterr().err
+
+
+def test_config_invalid_reasoning_effort_rejected(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("COMMITTER_REASONING_EFFORT", "turbo")
+
+    with pytest.raises(SystemExit) as exc:
+        Config(subcommand="commit")
+
+    assert exc.value.code == 1
+    assert "invalid reasoning_effort 'turbo'" in capsys.readouterr().err
+
+
 def test_load_xdg_config_converts_numbers_to_strings(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -761,6 +884,7 @@ def test_main_not_repo(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_is_conventional_true() -> None:
     assert committer._is_conventional("feat: add x")
     assert committer._is_conventional("fix(api): patch timeout")
+    assert committer._is_conventional("feat(): allow empty scope")
     assert committer._is_conventional("chore!: drop old flow")
     assert committer._is_conventional("revert: rollback release")
 
@@ -928,7 +1052,7 @@ def test_apply_filter_repo_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         rewrite_module.subprocess,
         "run",
-        lambda cmd, **kwargs: SimpleNamespace(returncode=1),
+        lambda cmd, **kwargs: SimpleNamespace(returncode=1, stderr=b""),
     )
     monkeypatch.setattr(
         rewrite_module, "die", lambda msg: (_ for _ in ()).throw(SystemExit(msg))
@@ -1089,7 +1213,7 @@ def test_commit_flow_warns_on_push_failure(
 
     code = committer._commit_flow(parsed_args(push=True))
 
-    assert code == 0
+    assert code == 1
     assert warnings == ["git push failed"]
     assert any("remote rejected" in msg for msg in log_warnings)
 
@@ -1121,7 +1245,7 @@ def test_rewrite_flow_warns_on_push_failure(
 
     code = committer._rewrite_flow(parsed_rewrite_args(push=True))
 
-    assert code == 0
+    assert code == 1
     assert warnings == ["git push --force-with-lease failed"]
     assert any("lease rejected" in msg for msg in log_warnings)
 

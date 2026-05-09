@@ -38,7 +38,11 @@ def assemble_message(payload: CommitMessage, config: Config) -> str:
 
     prefix = _build_prefix(type_, scope)
     max_subject_len = max(1, 72 - len(prefix))
-    subject = subject[:max_subject_len].rstrip() or "update project files"
+    if len(subject) > max_subject_len:
+        cut = subject[:max_subject_len]
+        space = cut.rfind(" ")
+        subject = cut[:space].rstrip() if space > 0 else cut.rstrip()
+    subject = subject or "update project files"
 
     header = prefix + subject
     if body:
@@ -74,5 +78,9 @@ def build_fallback_message(staged_files: list[str]) -> str:
 
     prefix = _build_prefix(type_, scope)
     max_subject_len = max(1, 72 - len(prefix))
-    subject = subject[:max_subject_len].rstrip() or "update project files"
+    if len(subject) > max_subject_len:
+        cut = subject[:max_subject_len]
+        space = cut.rfind(" ")
+        subject = cut[:space].rstrip() if space > 0 else cut.rstrip()
+    subject = subject or "update project files"
     return prefix + subject

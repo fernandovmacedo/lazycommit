@@ -11,19 +11,26 @@ from committer.console import warn
 from committer.constants import DIFF_EXCLUDE_PATTERNS
 from committer.logger import log_debug
 
+_GIT_TIMEOUT_S = 30
+
 
 def run_git(*args: str) -> str | None:
     """Run a git command and return stdout, or None on failure."""
     label = " ".join(args[:2]) if len(args) >= 2 else args[0] if args else "git"
     log_debug(f"git {label} → start")
-    result = subprocess.run(
-        ["git", *args],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=_GIT_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        log_debug(f"git {label} → timeout after {_GIT_TIMEOUT_S}s")
+        return None
     if result.returncode != 0:
         log_debug(f"git {label} → exit {result.returncode}")
         return None
@@ -33,7 +40,14 @@ def run_git(*args: str) -> str | None:
 
 def has_staged_changes() -> bool:
     """Check if there are staged changes."""
-    result = subprocess.run(["git", "diff", "--cached", "--quiet"], capture_output=True)
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            capture_output=True,
+            timeout=_GIT_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        return False
     return result.returncode != 0
 
 
@@ -48,7 +62,15 @@ def auto_stage(git_args: Sequence[str]) -> None:
         return
     if has_staged_changes():
         return
-    subprocess.run(["git", "add", "-A"], capture_output=True, check=False)
+    try:
+        subprocess.run(
+            ["git", "add", "-A"],
+            capture_output=True,
+            check=False,
+            timeout=_GIT_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        return
 
 
 def get_staged_diff() -> str:
@@ -146,8 +168,14 @@ def load_context_file(path: str | None, repo_root: str) -> str:
                 return f.read().strip()
         except FileNotFoundError:
             continue
-        except (OSError, UnicodeDecodeError):
-            warn(f"cannot read context file {candidate}")
+        except UnicodeDecodeError as exc:
+            warn(
+                f"cannot read context file {candidate}:"
+                f" not valid UTF-8 ({exc.reason})"
+            )
+            return ""
+        except OSError as exc:
+            warn(f"cannot read context file {candidate}: {exc.strerror}")
             return ""
     return ""
 
@@ -161,7 +189,7 @@ def truncate_diff(diff: str, max_chars: int) -> tuple[str, bool]:
     newline_idx = chunk.rfind("\n")
     if newline_idx > 0:
         chunk = chunk[:newline_idx]
-    return chunk.rstrip(), True
+    return chunk.rstrip("\n"), True
 
 
 def build_user_context(

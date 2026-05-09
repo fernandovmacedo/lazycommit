@@ -266,6 +266,7 @@ def _commit_flow(config: Config) -> int:
                 if stderr:
                     log_warning(f"git_push stderr: {stderr}")
                 warn("git push failed")
+                return 1
     else:
         log_warning(f"commit_flow end: git commit failed code={code}")
 
@@ -378,6 +379,7 @@ def _rewrite_flow(config: Config) -> int:
     _apply_filter_repo(message_map)
     log_info("filter_repo end")
 
+    exit_code = 0
     if config.push:
         log_info("git_push start force-with-lease")
         push = subprocess.run(
@@ -389,10 +391,11 @@ def _rewrite_flow(config: Config) -> int:
             if stderr:
                 log_warning(f"git_push stderr: {stderr}")
             warn("git push --force-with-lease failed")
+            exit_code = 1
 
     elapsed = time.perf_counter() - start
     log_info(f"rewrite_flow end elapsed={elapsed:.2f}s")
     if not config.silent:
         _print_summary(elapsed, usage_totals)
 
-    return 0
+    return exit_code

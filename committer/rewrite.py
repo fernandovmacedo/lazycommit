@@ -144,10 +144,13 @@ def _apply_filter_repo(message_map: dict[str, str]) -> None:
 
         result = subprocess.run(
             ["git", "filter-repo", "--force", "--commit-callback", f"@{tmp_path}"],
+            capture_output=True,
             check=False,
         )
         if result.returncode != 0:
-            die(f"git filter-repo failed (exit {result.returncode})")
+            stderr = result.stderr.decode("utf-8", errors="replace").strip()
+            detail = f": {stderr}" if stderr else ""
+            die(f"git filter-repo failed (exit {result.returncode}){detail}")
     finally:
         if tmp_path:
             with suppress(OSError):

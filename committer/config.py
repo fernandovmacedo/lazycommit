@@ -80,3 +80,14 @@ class Config:
 
     # Shared fallback behavior.
     fallback: str | None = None
+
+    def __post_init__(self) -> None:
+        from committer.console import die
+
+        if not self.model or not self.model.strip():
+            die("model cannot be empty; check COMMITTER_MODEL or --model")
+        if self.reasoning_effort not in REASONING_EFFORT_CHOICES:
+            die(
+                f"invalid reasoning_effort {self.reasoning_effort!r};"
+                f" must be one of: {', '.join(REASONING_EFFORT_CHOICES)}"
+            )

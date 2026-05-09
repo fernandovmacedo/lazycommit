@@ -18,16 +18,18 @@ ALLOWED_TYPES: frozenset[str] = frozenset({
     "revert",
 })
 
-SYSTEM_PROMPT = """You are a git commit message generator.
+_ALLOWED_TYPES_STR = "|".join(sorted(ALLOWED_TYPES))
+
+SYSTEM_PROMPT = f"""You are a git commit message generator.
 Respond ONLY with a valid JSON object - no explanation, no markdown, no code fences.
 
 Schema:
-{
-  "type": "feat|fix|refactor|chore|docs|test|style|perf|ci|build|revert",
+{{
+  "type": "{_ALLOWED_TYPES_STR}",
   "scope": "kebab-case scope or empty string",
   "subject": "imperative mood, lowercase start, no trailing period",
   "body": "optional multiline explanation, empty string if not needed"
-}
+}}
 
 Rules:
 - Use the branch name as a scope hint.
@@ -47,5 +49,5 @@ DIFF_EXCLUDE_PATTERNS = (":(exclude)*.lock", ":(exclude)*lock.json")
 
 # Regex for conventional commit format: type(scope)!?: subject
 _CONVENTIONAL_RE = re.compile(
-    r"^(" + "|".join(sorted(ALLOWED_TYPES)) + r")(\([^)]+\))?!?:\s"
+    r"^(" + "|".join(sorted(ALLOWED_TYPES)) + r")(\([^)]*\))?!?:\s"
 )
