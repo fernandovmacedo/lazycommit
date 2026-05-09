@@ -4,6 +4,12 @@
 
 When AI generation is unavailable, times out, returns invalid structured output, or is skipped for bulk changes, `committer` falls back to a deterministic message generator so the command still completes.
 
+## Why
+
+You can always ask your coding agent to commit for you, but agent models are often slower and more expensive than they need to be for this step. `committer` is meant for the middle of AI-assisted coding sessions, where you want to keep moving and still produce clean Conventional Commits.
+
+Instead of spending a larger model call on commit generation, `committer` lets you use fast, cheap models to auto-commit work in one command. That keeps the commit step lightweight without giving up structured messages or a reliable fallback path.
+
 ## Features
 
 - Auto-staging that preserves partial staging and skips `git add -A` for `--amend`
