@@ -265,6 +265,35 @@ uv run --group dev ruff check committer/ tests/
 uv run --group dev mypy committer/
 ```
 
+## Releases
+
+Release artifacts are built automatically by GitHub Actions when you push an
+annotated semver tag in the form `vX.Y.Z`.
+
+Release process:
+
+```bash
+# 1. Bump both version strings to the same value.
+$EDITOR pyproject.toml committer/__init__.py
+
+# 2. Commit the version bump.
+git add pyproject.toml committer/__init__.py
+git commit -m "chore: release v1.0.0"
+
+# 3. Create and push the annotated release tag.
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin master
+git push origin v1.0.0
+```
+
+The release workflow verifies that the tag version matches both
+`pyproject.toml` and `committer.__version__`, builds the wheel and source
+distribution with `uv build`, creates or updates the GitHub Release, and uploads
+the files from `dist/` as release assets.
+
+For the current package version, create tag `v1.0.0` from the commit where both
+version declarations are `1.0.0`.
+
 Runtime dependencies:
 
 - `litellm`

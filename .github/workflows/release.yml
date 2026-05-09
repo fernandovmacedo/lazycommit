@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Verify tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag_version="${RELEASE_TAG#v}"
+          project_version="$(python - <<'PY'
+          import re
+          from pathlib import Path
+
+          text = Path("pyproject.toml").read_text(encoding="utf-8")
+          match = re.search(r'^version = "([^"]+)"$', text, re.MULTILINE)
+          if match is None:
+              raise SystemExit("Unable to find project.version in pyproject.toml")
+          print(match.group(1))
+          PY
+          )"
+          package_version="$(python - <<'PY'
+          import re
+          from pathlib import Path
+
+          text = Path("committer/__init__.py").read_text(encoding="utf-8")
+          match = re.search(r'^__version__ = "([^"]+)"$', text, re.MULTILINE)
+          if match is None:
+              raise SystemExit("Unable to find committer.__version__")
+          print(match.group(1))
+          PY
+          )"
+
+          test "${tag_version}" = "${project_version}" || {
+            echo "Tag ${tag_version} does not match pyproject.toml version ${project_version}" >&2
+            exit 1
+          }
+          test "${tag_version}" = "${package_version}" || {
+            echo "Tag ${tag_version} does not match committer.__version__ ${package_version}" >&2
+            exit 1
+          }
+
+      - name: Build release artifacts
+        run: uv build
+
+      - name: Smoke test CLI entrypoint
+        run: uv run python -m committer --help
+
+      - name: Create or update GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${{ github.ref_name }}"
+          dist/*
+          --repo "${{ github.repository }}"
+          --title "${{ github.ref_name }}"
+          --generate-notes
+          || gh release upload "${{ github.ref_name }}" dist/* --repo "${{ github.repository }}" --clobber
