@@ -8,7 +8,7 @@ When AI generation is unavailable, times out, returns invalid structured output,
 
 You can always ask your coding agent to commit for you, but agent models are often slower and more expensive than they need to be for this step. `committer` is meant for the middle of AI-assisted coding sessions, where you want to keep moving and still produce clean Conventional Commits.
 
-Instead of spending a larger model call on commit generation, `committer` lets you use fast, cheap models to auto-commit work in one command. That keeps the commit step lightweight without giving up structured messages or a reliable fallback path.
+Instead of spending a larger model call on commit generation, `committer` lets you use fast, cheap models to auto-commit work in one command. In practice, these commits usually take under 3 seconds. That keeps the commit step lightweight without giving up structured messages or a reliable fallback path.
 
 ## Features
 
