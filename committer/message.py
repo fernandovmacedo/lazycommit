@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from committer.config import Config
+from committer.constants import MAX_SUBJECT_LEN
 
 
 class CommitMessage(BaseModel):
@@ -37,7 +38,7 @@ def assemble_message(payload: CommitMessage, config: Config) -> str:
     body = "" if config.no_body else payload.body.strip()
 
     prefix = _build_prefix(type_, scope)
-    max_subject_len = max(1, 72 - len(prefix))
+    max_subject_len = max(1, MAX_SUBJECT_LEN - len(prefix))
     if len(subject) > max_subject_len:
         cut = subject[:max_subject_len]
         space = cut.rfind(" ")
@@ -77,7 +78,7 @@ def build_fallback_message(staged_files: list[str]) -> str:
         subject = f"update {paths[0]}"
 
     prefix = _build_prefix(type_, scope)
-    max_subject_len = max(1, 72 - len(prefix))
+    max_subject_len = max(1, MAX_SUBJECT_LEN - len(prefix))
     if len(subject) > max_subject_len:
         cut = subject[:max_subject_len]
         space = cut.rfind(" ")

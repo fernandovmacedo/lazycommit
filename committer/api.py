@@ -61,9 +61,11 @@ class UsageStats:
 
 def _get_detail(obj: object, key: str) -> int:
     """Read a usage detail from either an object or a dict payload."""
-    if isinstance(obj, dict):
-        return int(obj.get(key, 0) or 0)
-    return int(getattr(obj, key, 0) or 0)
+    val = obj.get(key, 0) if isinstance(obj, dict) else getattr(obj, key, 0)
+    try:
+        return int(val or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _extract_usage_stats(response: Any) -> UsageStats | None:

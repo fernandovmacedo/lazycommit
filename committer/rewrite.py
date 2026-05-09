@@ -23,7 +23,10 @@ def _check_filter_repo() -> None:
     """Verify git-filter-repo is installed."""
     try:
         result = subprocess.run(
-            ["git", "filter-repo", "--version"], capture_output=True, check=False
+            ["git", "filter-repo", "--version"],
+            capture_output=True,
+            check=False,
+            timeout=10,
         )
     except OSError:
         result = None
@@ -139,8 +142,8 @@ def _apply_filter_repo(message_map: dict[str, str]) -> None:
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".py", encoding="utf-8", delete=False
         ) as tmp:
-            tmp.write(callback)
             tmp_path = tmp.name
+            tmp.write(callback)
 
         result = subprocess.run(
             ["git", "filter-repo", "--force", "--commit-callback", f"@{tmp_path}"],

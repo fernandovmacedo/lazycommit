@@ -71,8 +71,6 @@ def parsed_rewrite_args(**overrides: object) -> Config:
         "no_body": False,
         "max_diff_chars": 12000,
         "timeout": 10.0,
-        "bulk_threshold": 50,
-        "force_ai": False,
         "directory": None,
     }
     defaults.update(overrides)
@@ -391,6 +389,21 @@ def test_auto_stage_timeout_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
     assert ["git", "add", "-A"] in calls
 
 
+def test_auto_stage_timeout_logs(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_run(cmd: list[str], **kwargs: object) -> SimpleNamespace:
+        if cmd[:3] == ["git", "diff", "--cached"]:
+            return SimpleNamespace(returncode=0)
+        raise git_module.subprocess.TimeoutExpired(cmd=cmd, timeout=30)
+
+    captured: list[str] = []
+    monkeypatch.setattr(git_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(git_module, "log_debug", captured.append)
+
+    committer.auto_stage([])
+
+    assert captured[-1] == "git add -A → timeout after 30s"
+
+
 def test_generate_commit_json_success(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_completion = SimpleNamespace(
         usage=SimpleNamespace(prompt_tokens=100, completion_tokens=50),
@@ -420,6 +433,42 @@ def test_generate_commit_json_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert stats.prompt_tokens == 100
     assert stats.completion_tokens == 50
     assert captured["mode"] is api_module.instructor.Mode.OPENROUTER_STRUCTURED_OUTPUTS
+
+
+def test_generate_commit_json_invalid_usage_detail_defaults_to_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_completion = SimpleNamespace(
+        usage=SimpleNamespace(
+            prompt_tokens=100,
+            completion_tokens=50,
+            prompt_tokens_details={"cached_tokens": "unknown"},
+            completion_tokens_details=SimpleNamespace(reasoning_tokens="unknown"),
+        ),
+        _hidden_params={},
+    )
+
+    class FakeCompletions:
+        @staticmethod
+        def create_with_completion(**kwargs: object) -> tuple[CommitMessage, object]:
+            return _FAKE_COMMIT, fake_completion
+
+    class FakeInstructorClient:
+        chat = SimpleNamespace(completions=FakeCompletions())
+
+    monkeypatch.setattr(
+        api_module.instructor,
+        "from_litellm",
+        lambda _fn, **_kwargs: FakeInstructorClient(),
+    )
+
+    _, stats = committer.generate_commit_json(
+        "k", "m", DEFAULT_REASONING_EFFORT, "sp", CommitMessage, "ctx", 1.0
+    )
+
+    assert stats is not None
+    assert stats.cached_tokens == 0
+    assert stats.reasoning_tokens == 0
 
 
 def test_generate_commit_json_passes_model_params(
@@ -936,6 +985,20 @@ def test_check_filter_repo_oserror(monkeypatch: pytest.MonkeyPatch) -> None:
     assert exc.value.code == 1
 
 
+def test_check_filter_repo_uses_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(*args: object, **kwargs: object) -> SimpleNamespace:
+        captured.update(kwargs)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(rewrite_module.subprocess, "run", fake_run)
+
+    rewrite_module._check_filter_repo()
+
+    assert captured["timeout"] == 10
+
+
 def test_get_rewrite_shas_non_conventional(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_run_git(*args: str) -> str | None:
         if args == ("log", "--format=%H", "--reverse"):
@@ -1131,7 +1194,7 @@ def test_rewrite_flow_nothing_to_rewrite(
     assert code == 0
     assert "nothing to rewrite" in out
     assert "Cost:" not in out
-    assert "Token usage: total=0 input=0 (+ 0 cached) output=0 (reasoning 0)" in out
+    assert "Token usage:" not in out
 
 
 def test_rewrite_flow_api_failure_omits_cost(
@@ -1593,7 +1656,11 @@ def test_meta_timeout_arms_and_disarms_alarm(monkeypatch: pytest.MonkeyPatch) ->
         pass
 
     assert len(alarm_calls) == 2
-    assert alarm_calls[0] == 25  # 10 * 2 + 5
+    expected = (
+        int(10.0) * flows._META_TIMEOUT_MULTIPLIER
+        + flows._META_TIMEOUT_OVERHEAD_S
+    )
+    assert alarm_calls[0] == expected
     assert alarm_calls[1] == 0  # disarmed
 
 
@@ -1628,6 +1695,18 @@ def test_meta_timeout_skips_on_non_main_thread(monkeypatch: pytest.MonkeyPatch) 
         "current_thread",
         lambda: SimpleNamespace(name="Thread-1"),
     )
+
+    with flows._ApiMetaTimeout(10.0):
+        pass
+
+    assert alarm_calls == []
+
+
+def test_meta_timeout_skips_without_sigalrm(monkeypatch: pytest.MonkeyPatch) -> None:
+    alarm_calls: list[int] = []
+
+    monkeypatch.setattr(flows, "_HAS_SIGALRM", False)
+    monkeypatch.setattr(flows.signal, "alarm", lambda s: alarm_calls.append(s) or 0)
 
     with flows._ApiMetaTimeout(10.0):
         pass

@@ -44,6 +44,8 @@ Rules:
   in English regardless of project language.
 """
 
+MAX_SUBJECT_LEN = 72
+
 # Patterns to exclude from git diffs (lockfiles)
 DIFF_EXCLUDE_PATTERNS = (":(exclude)*.lock", ":(exclude)*lock.json")
 

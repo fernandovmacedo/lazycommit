@@ -70,6 +70,7 @@ def auto_stage(git_args: Sequence[str]) -> None:
             timeout=_GIT_TIMEOUT_S,
         )
     except subprocess.TimeoutExpired:
+        log_debug(f"git add -A → timeout after {_GIT_TIMEOUT_S}s")
         return
 
 

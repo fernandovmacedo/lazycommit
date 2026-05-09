@@ -52,6 +52,7 @@ from committer.rewrite import (
 # The multiplier accounts for max_retries=1 in api.py (up to 2 attempts).
 _META_TIMEOUT_MULTIPLIER = 2
 _META_TIMEOUT_OVERHEAD_S = 5  # seconds buffer for retries and overhead
+_HAS_SIGALRM = hasattr(signal, "SIGALRM")
 
 
 def _meta_timeout_handler(signum: int, frame: object) -> None:
@@ -75,7 +76,14 @@ class _ApiMetaTimeout:
         )
         self._prev_handler: Callable[[int, FrameType | None], Any] | int | None = None
 
+    @property
+    def seconds(self) -> int:
+        return self._seconds
+
     def __enter__(self) -> _ApiMetaTimeout:
+        if not _HAS_SIGALRM:
+            log_warning("meta_timeout skipped: SIGALRM unavailable")
+            return self
         if threading.current_thread() is not threading.main_thread():
             log_warning("meta_timeout skipped: not on main thread")
             return self
@@ -84,7 +92,10 @@ class _ApiMetaTimeout:
         return self
 
     def __exit__(self, *exc: object) -> None:
-        if threading.current_thread() is not threading.main_thread():
+        if (
+            not _HAS_SIGALRM
+            or threading.current_thread() is not threading.main_thread()
+        ):
             return
         signal.alarm(0)
         if self._prev_handler is not None:
@@ -199,7 +210,7 @@ def _commit_flow(config: Config) -> int:
         api_start = time.perf_counter()
         log_info(
             f"api_call start model={config.model}"
-            f" timeout={config.timeout}s meta_timeout={meta._seconds}s"
+            f" timeout={config.timeout}s meta_timeout={meta.seconds}s"
         )
         try:
             with meta:
@@ -295,7 +306,7 @@ def _rewrite_flow(config: Config) -> int:
         log_info("rewrite_flow end: nothing to rewrite")
         if not config.silent:
             out("nothing to rewrite")
-            _print_summary(time.perf_counter() - start, UsageStats(0, 0))
+            _print_summary(time.perf_counter() - start, None)
         return 0
     log_info(f"rewrite_flow commits={len(shas)}")
     if not config.silent and config.verbose:
@@ -332,7 +343,7 @@ def _rewrite_flow(config: Config) -> int:
             meta = _ApiMetaTimeout(config.timeout)
             log_info(
                 f"api_call sha={sha[:8]} start"
-                f" meta_timeout={meta._seconds}s"
+                f" meta_timeout={meta.seconds}s"
             )
             try:
                 with meta:
