@@ -20,6 +20,7 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
+    "argcomplete>=3.0,<4.0",
     "litellm>=1.60.0,<2.0",
     "instructor>=1.7.0,<2.0",
     "pydantic>=2.0,<3.0",

@@ -41,6 +41,12 @@ Create a commit:
 committer
 ```
 
+Enable shell completion after installing the CLI:
+
+```bash
+eval "$(register-python-argcomplete committer)"
+```
+
 Pass raw `git commit` flags after `--`:
 
 ```bash
@@ -60,6 +66,19 @@ Optional shell alias:
 
 ```bash
 alias gg='committer'
+```
+
+Shell completion is supported for Bash and Zsh through `argcomplete`. After
+installing the package, register completion in your shell:
+
+```bash
+# Bash
+eval "$(register-python-argcomplete committer)"
+
+# Zsh
+autoload -U bashcompinit
+bashcompinit
+eval "$(register-python-argcomplete committer)"
 ```
 
 The `rewrite` subcommand also requires `git-filter-repo`, which is not installed by `uv tool install`:

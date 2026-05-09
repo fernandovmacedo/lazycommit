@@ -1692,6 +1692,24 @@ def test_parse_unpushed_short_flag_rewrite() -> None:
     assert config.unpushed is True
 
 
+def test_parse_commit_git_args_after_separator() -> None:
+    sys.argv = ["committer", "--", "--amend", "--no-verify"]
+
+    config = committer.parse_args()
+
+    assert config.subcommand == "commit"
+    assert config.git_args == ("--amend", "--no-verify")
+
+
+def test_parse_rewrite_rejects_git_args_after_separator() -> None:
+    sys.argv = ["committer", "rewrite", "--", "--amend"]
+
+    with pytest.raises(SystemExit) as exc:
+        committer.parse_args()
+
+    assert exc.value.code == 2
+
+
 def test_parse_removed_silent_short_flag_rejected() -> None:
     sys.argv = ["committer", "-S"]
 
@@ -1860,6 +1878,35 @@ def test_rewrite_help_text_mentions_current_flags(
     assert "rewrite" in out
     assert "--bulk-threshold" not in out
     assert "--force-ai" not in out
+
+
+def test_commit_help_text_mentions_rewrite_subcommand(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sys.argv = ["committer", "--help"]
+
+    with pytest.raises(SystemExit):
+        committer.parse_args()
+
+    out = capsys.readouterr().out
+    assert "commands:" in out
+    assert "rewrite" in out
+
+
+def test_parse_args_enables_completion(monkeypatch: pytest.MonkeyPatch) -> None:
+    sys.argv = ["committer"]
+
+    captured: list[object] = []
+    monkeypatch.setattr(
+        committer,
+        "_enable_completion",
+        lambda parser: captured.append(parser),
+    )
+
+    config = committer.parse_args()
+
+    assert config.subcommand == "commit"
+    assert len(captured) == 1
 
 
 def test_logger_falls_back_to_nullhandler(

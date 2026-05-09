@@ -1,3 +1,4 @@
+# PYTHON_ARGCOMPLETE_OK
 """
 Committer CLI for AI-assisted Conventional Commit generation and rewrites.
 
@@ -11,6 +12,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+
+import argcomplete
 
 # Re-export for test mocking and backward-compatible imports.
 from committer.api import (
@@ -150,6 +153,31 @@ class ParsedRewriteArgs(argparse.Namespace):
     timeout: float
     fallback: str | None
     directory: str | None
+
+
+class ParsedRootArgs(argparse.Namespace):
+    """Internal parser namespace for the unified root parser."""
+    command: str | None
+    directory: str | None
+    dry_run: bool
+    push: bool
+    silent: bool
+    verbose: bool
+    model: str
+    reasoning_effort: str
+    no_body: bool
+    max_diff_chars: int
+    timeout: float
+    fallback: str | None
+    bulk_threshold: int
+    force_ai: bool
+    type: str | None
+    scope: str | None
+    context: str | None
+    sha: str | None
+    all_commits: bool
+    non_conventional: bool
+    unpushed: bool
 
 
 def _non_negative_int(value: str) -> int:
@@ -302,8 +330,41 @@ def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) 
         )
 
 
-def _parse_commit_args() -> Config:
-    """Parse arguments for the commit subcommand."""
+def _add_commit_args(parser: argparse.ArgumentParser) -> None:
+    """Add commit-only arguments to a parser."""
+    parser.set_defaults(command="commit")
+    parser.add_argument("-t", "--type", help="Override commit type")
+    parser.add_argument("-s", "--scope", help="Override commit scope")
+    parser.add_argument("-c", "--context", help="Path to an extra context file")
+
+
+def _add_rewrite_args(parser: argparse.ArgumentParser) -> None:
+    """Add rewrite-only arguments to a parser."""
+    parser.set_defaults(command="rewrite")
+    parser.add_argument("sha", nargs="?", help="Rewrite from this SHA through HEAD")
+    parser.add_argument(
+        "-a",
+        "--all",
+        dest="all_commits",
+        action="store_true",
+        help="Rewrite all commits in history",
+    )
+    parser.add_argument(
+        "-N",
+        "--non-conventional",
+        action="store_true",
+        help="Rewrite only non-conventional commit messages (default)",
+    )
+    parser.add_argument(
+        "-u",
+        "--unpushed",
+        action="store_true",
+        help="Rewrite commits not yet pushed to the upstream branch",
+    )
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the unified root parser with rewrite as a real subcommand."""
     parser = argparse.ArgumentParser(
         prog="committer",
         description="Generate Conventional Commit messages and run git commit",
@@ -312,22 +373,33 @@ def _parse_commit_args() -> Config:
         "--version", action="version", version=f"%(prog)s {__version__}"
     )
     _add_common_args(parser)
-    parser.add_argument("-t", "--type", help="Override commit type")
-    parser.add_argument("-s", "--scope", help="Override commit scope")
-    parser.add_argument("-c", "--context", help="Path to an extra context file")
-    parser.add_argument(
-        "git_args",
-        nargs=argparse.REMAINDER,
-        help="Additional git commit arguments passed after --",
+    _add_commit_args(parser)
+
+    subparsers = parser.add_subparsers(
+        dest="command",
+        title="commands",
+        metavar="{rewrite}",
     )
+    rewrite_parser = subparsers.add_parser(
+        "rewrite",
+        description="Rewrite commit history into Conventional Commit format",
+        help="Rewrite existing commit messages into Conventional Commit format",
+    )
+    rewrite_parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
+    _add_common_args(rewrite_parser, rewrite=True)
+    _add_rewrite_args(rewrite_parser)
 
-    args = parser.parse_args(namespace=ParsedArgs())
+    return parser
 
-    # Handle -- separator
-    git_args = args.git_args
-    if git_args and git_args[0] == "--":
-        git_args = git_args[1:]
 
+def _validate_commit_args(
+    parser: argparse.ArgumentParser,
+    args: ParsedRootArgs,
+    git_args: tuple[str, ...],
+) -> Config:
+    """Validate parsed commit arguments and convert them to Config."""
     # Validate fallback
     fallback = args.fallback.strip() if args.fallback else None
     if args.fallback is not None and not fallback:
@@ -363,44 +435,16 @@ def _parse_commit_args() -> Config:
         type=args.type,
         scope=args.scope.strip() if args.scope is not None else None,
         context=args.context,
-        git_args=tuple(git_args),
+        git_args=git_args,
         fallback=fallback,
     )
 
 
-def _parse_rewrite_args() -> Config:
-    """Parse arguments for the rewrite subcommand."""
-    parser = argparse.ArgumentParser(
-        prog="committer rewrite",
-        description="Rewrite commit history into Conventional Commit format",
-    )
-    parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {__version__}"
-    )
-    parser.add_argument("sha", nargs="?", help="Rewrite from this SHA through HEAD")
-    parser.add_argument(
-        "-a",
-        "--all",
-        dest="all_commits",
-        action="store_true",
-        help="Rewrite all commits in history",
-    )
-    parser.add_argument(
-        "-N",
-        "--non-conventional",
-        action="store_true",
-        help="Rewrite only non-conventional commit messages (default)",
-    )
-    parser.add_argument(
-        "-u",
-        "--unpushed",
-        action="store_true",
-        help="Rewrite commits not yet pushed to the upstream branch",
-    )
-    _add_common_args(parser, rewrite=True)
-
-    args = parser.parse_args(sys.argv[2:], namespace=ParsedRewriteArgs())
-
+def _validate_rewrite_args(
+    parser: argparse.ArgumentParser,
+    args: ParsedRootArgs,
+) -> Config:
+    """Validate parsed rewrite arguments and convert them to Config."""
     # Validate mutually exclusive options
     mode_count = (
         int(bool(args.sha))
@@ -440,11 +484,32 @@ def _parse_rewrite_args() -> Config:
     )
 
 
+def _split_git_args(argv: list[str]) -> tuple[list[str], tuple[str, ...]]:
+    """Split commit passthrough args from argv."""
+    if "--" not in argv:
+        return argv, ()
+    separator = argv.index("--")
+    return argv[:separator], tuple(argv[separator + 1 :])
+
+
+def _enable_completion(parser: argparse.ArgumentParser) -> None:
+    """Enable argcomplete on the parser."""
+    argcomplete.autocomplete(parser)
+
+
 def parse_args() -> Config:
     """Parse command-line arguments and return a Config object."""
-    if len(sys.argv) > 1 and sys.argv[1] == "rewrite":
-        return _parse_rewrite_args()
-    return _parse_commit_args()
+    argv, git_args = _split_git_args(sys.argv[1:])
+    parser = _build_parser()
+    _enable_completion(parser)
+    args = parser.parse_args(argv, namespace=ParsedRootArgs())
+
+    if args.command == "rewrite":
+        if git_args:
+            parser.error("git commit arguments after -- are only supported for commit")
+        return _validate_rewrite_args(parser, args)
+
+    return _validate_commit_args(parser, args, git_args)
 
 
 def main() -> int:
