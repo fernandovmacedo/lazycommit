@@ -34,10 +34,10 @@ Requirements:
 - `git`
 - `OPENROUTER_API_KEY` in your environment
 
-Install locally from the repo:
+Install from GitHub:
 
 ```bash
-uv tool install --editable .
+uv tool install git+https://github.com/fernandovmacedo/lazycommit
 export OPENROUTER_API_KEY="sk-or-your-key-here"
 ```
 
@@ -67,6 +67,18 @@ lcm -- --amend
 ```
 
 ## Install and Requirements
+
+Install from GitHub:
+
+```bash
+uv tool install git+https://github.com/fernandovmacedo/lazycommit
+```
+
+If you want to edit the code locally while using the CLI, install from a local checkout instead:
+
+```bash
+uv tool install --editable .
+```
 
 If you do not want to install the CLI into your tool environment, you can run it directly from the repo:
 
