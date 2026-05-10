@@ -48,10 +48,10 @@ jobs:
           import re
           from pathlib import Path
 
-          text = Path("autocommit/__init__.py").read_text(encoding="utf-8")
+          text = Path("lazycommit/__init__.py").read_text(encoding="utf-8")
           match = re.search(r'^__version__ = "([^"]+)"$', text, re.MULTILINE)
           if match is None:
-              raise SystemExit("Unable to find autocommit.__version__")
+              raise SystemExit("Unable to find lazycommit.__version__")
           print(match.group(1))
           PY
           )"
@@ -61,7 +61,7 @@ jobs:
             exit 1
           }
           test "${tag_version}" = "${package_version}" || {
-            echo "Tag ${tag_version} does not match autocommit.__version__ ${package_version}" >&2
+            echo "Tag ${tag_version} does not match lazycommit.__version__ ${package_version}" >&2
             exit 1
           }
 
@@ -69,7 +69,7 @@ jobs:
         run: uv build
 
       - name: Smoke test CLI entrypoint
-        run: uv run python -m autocommit --help
+        run: uv run python -m lazycommit --help
 
       - name: Create or update GitHub Release
         env:
