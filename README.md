@@ -288,8 +288,14 @@ git push origin v1.0.0
 
 The release workflow verifies that the tag version matches both
 `pyproject.toml` and `autocommit.__version__`, builds the wheel and source
-distribution with `uv build`, creates or updates the GitHub Release, and uploads
-the files from `dist/` as release assets.
+distribution with `uv build`, creates or updates the GitHub Release, uploads
+the files from `dist/` as release assets, and publishes the same distributions
+to PyPI via Trusted Publishing.
+
+Before the first PyPI release, create the `autocommit` project on PyPI and add
+a Trusted Publisher for this repository's `.github/workflows/release.yml`
+workflow. The publish job uses the `pypi` GitHub Actions environment and
+requires PyPI-side configuration to trust that workflow identity.
 
 For the current package version, create tag `v1.0.0` from the commit where both
 version declarations are `1.0.0`.

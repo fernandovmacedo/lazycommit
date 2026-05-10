@@ -81,3 +81,31 @@ jobs:
           --title "${{ github.ref_name }}"
           --generate-notes
           || gh release upload "${{ github.ref_name }}" dist/* --repo "${{ github.repository }}" --clobber
+
+  pypi-publish:
+    name: Publish package to PyPI
+    runs-on: ubuntu-latest
+    needs: release
+    environment: pypi
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Build release artifacts
+        run: uv build
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
