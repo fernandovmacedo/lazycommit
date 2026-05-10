@@ -1,4 +1,4 @@
-"""Constants and schemas for committer."""
+"""Constants and schemas for autocommit."""
 
 from __future__ import annotations
 

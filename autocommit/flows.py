@@ -11,17 +11,17 @@ from collections.abc import Callable
 from types import FrameType
 from typing import Any, cast
 
-from committer.api import UsageStats, generate_commit_json
-from committer.config import Config
-from committer.console import (
+from autocommit.api import UsageStats, generate_commit_json
+from autocommit.config import Config
+from autocommit.console import (
     _print_verbose_request,
     _print_verbose_response,
     err,
     out,
     warn,
 )
-from committer.constants import GIT_COMMIT_TIMEOUT_S, GIT_PUSH_TIMEOUT_S, SYSTEM_PROMPT
-from committer.git import (
+from autocommit.constants import GIT_COMMIT_TIMEOUT_S, GIT_PUSH_TIMEOUT_S, SYSTEM_PROMPT
+from autocommit.git import (
     auto_stage,
     build_user_context,
     get_branch_name,
@@ -35,13 +35,13 @@ from committer.git import (
     run_git,
     truncate_diff,
 )
-from committer.logger import log_error, log_info, log_warning
-from committer.message import (
+from autocommit.logger import log_error, log_info, log_warning
+from autocommit.message import (
     CommitMessage,
     assemble_message,
     build_fallback_message,
 )
-from committer.rewrite import (
+from autocommit.rewrite import (
     _apply_filter_repo,
     _build_commit_context,
     _check_filter_repo,
@@ -143,7 +143,7 @@ def _print_summary(elapsed: float, usage_stats: UsageStats | None) -> None:
 
 def _commit_flow(config: Config) -> int:
     """Execute the commit workflow, including deterministic fallback paths."""
-    from committer.console import die
+    from autocommit.console import die
 
     start = time.perf_counter()
     log_info(
@@ -313,7 +313,7 @@ def _commit_flow(config: Config) -> int:
 
 def _rewrite_flow(config: Config) -> int:
     """Execute the commit-history rewrite workflow."""
-    from committer.console import die
+    from autocommit.console import die
 
     start = time.perf_counter()
     log_info(

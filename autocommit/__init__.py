@@ -1,6 +1,6 @@
 # PYTHON_ARGCOMPLETE_OK
 """
-Committer CLI for AI-assisted Conventional Commit generation and rewrites.
+Autocommit CLI for AI-assisted Conventional Commit generation and rewrites.
 
 This package provides a CLI for generating Conventional Commit messages and
 rewriting existing history via OpenRouter-backed structured outputs, with a
@@ -16,17 +16,17 @@ import sys
 import argcomplete
 
 # Re-export for test mocking and backward-compatible imports.
-from committer.api import (
+from autocommit.api import (
     UsageStats,
     generate_commit_json,
 )
-from committer.config import (
+from autocommit.config import (
     DEFAULT_MODEL,
     DEFAULT_REASONING_EFFORT,
     REASONING_EFFORT_CHOICES,
     Config,
 )
-from committer.console import (
+from autocommit.console import (
     _print_verbose_request,  # noqa: F401
     _print_verbose_response,  # noqa: F401
     die,
@@ -34,9 +34,9 @@ from committer.console import (
     out,
     warn,
 )
-from committer.constants import ALLOWED_TYPES, SCOPE_RE, SYSTEM_PROMPT
-from committer.flows import _commit_flow, _print_summary, _rewrite_flow, commit_changes
-from committer.git import (
+from autocommit.constants import ALLOWED_TYPES, SCOPE_RE, SYSTEM_PROMPT
+from autocommit.flows import _commit_flow, _print_summary, _rewrite_flow, commit_changes
+from autocommit.git import (
     auto_stage,
     build_user_context,
     get_branch_name,
@@ -51,12 +51,12 @@ from committer.git import (
     run_git,
     truncate_diff,
 )
-from committer.message import (
+from autocommit.message import (
     CommitMessage,
     assemble_message,
     build_fallback_message,
 )
-from committer.rewrite import (
+from autocommit.rewrite import (
     _apply_filter_repo,
     _build_commit_context,
     _check_filter_repo,
@@ -272,7 +272,7 @@ def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) 
     parser.add_argument(
         "-m",
         "--model",
-        default=os.environ.get("COMMITTER_MODEL", DEFAULT_MODEL),
+        default=os.environ.get("AUTOCOMMIT_MODEL", DEFAULT_MODEL),
         help="OpenRouter model slug",
     )
     parser.add_argument(
@@ -280,7 +280,7 @@ def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) 
         "--reasoning-effort",
         choices=REASONING_EFFORT_CHOICES,
         default=os.environ.get(
-            "COMMITTER_REASONING_EFFORT", DEFAULT_REASONING_EFFORT
+            "AUTOCOMMIT_REASONING_EFFORT", DEFAULT_REASONING_EFFORT
         ),
         help="Reasoning effort sent to OpenRouter",
     )
@@ -294,14 +294,14 @@ def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) 
         "-d",
         "--max-diff-chars",
         type=_non_negative_int,
-        default=_env_non_negative_int("COMMITTER_MAX_DIFF_CHARS", 12000),
+        default=_env_non_negative_int("AUTOCOMMIT_MAX_DIFF_CHARS", 12000),
         help="Maximum diff characters sent to the model",
     )
     parser.add_argument(
         "-T",
         "--timeout",
         type=_positive_float,
-        default=_env_positive_float("COMMITTER_TIMEOUT", 10.0),
+        default=_env_positive_float("AUTOCOMMIT_TIMEOUT", 10.0),
         help="Per-call API timeout in seconds",
     )
     parser.add_argument(
@@ -316,7 +316,7 @@ def _add_common_args(parser: argparse.ArgumentParser, *, rewrite: bool = False) 
             "-B",
             "--bulk-threshold",
             type=_non_negative_int,
-            default=_env_non_negative_int("COMMITTER_BULK_THRESHOLD", 50),
+            default=_env_non_negative_int("AUTOCOMMIT_BULK_THRESHOLD", 50),
             help=(
                 "Skip AI when staged files exceed this count "
                 "(0 disables the limit, default: 50)"
@@ -366,7 +366,7 @@ def _add_rewrite_args(parser: argparse.ArgumentParser) -> None:
 def _build_parser() -> argparse.ArgumentParser:
     """Build the unified root parser with rewrite as a real subcommand."""
     parser = argparse.ArgumentParser(
-        prog="committer",
+        prog="autocommit",
         description="Generate Conventional Commit messages and run git commit",
     )
     parser.add_argument(
@@ -513,7 +513,7 @@ def parse_args() -> Config:
 
 
 def main() -> int:
-    """Main entry point for the committer CLI."""
+    """Main entry point for the autocommit CLI."""
     try:
         # Load XDG config FIRST, before parsing args
         # This ensures env vars are available as CLI defaults

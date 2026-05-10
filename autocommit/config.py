@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Literal
 
-from committer.constants import ALLOWED_TYPES, SCOPE_RE
+from autocommit.constants import ALLOWED_TYPES, SCOPE_RE
 
 DEFAULT_MODEL = "google/gemini-3.1-flash-lite"
 DEFAULT_REASONING_EFFORT = "none"
@@ -18,7 +18,7 @@ def _env_int(key: str, default: int) -> int:
     try:
         return int(val)
     except ValueError:
-        from committer.console import die
+        from autocommit.console import die
 
         die(f"invalid value for {key}: {val!r} (expected integer)")
 
@@ -28,7 +28,7 @@ def _env_float(key: str, default: float) -> float:
     try:
         return float(val)
     except ValueError:
-        from committer.console import die
+        from autocommit.console import die
 
         die(f"invalid value for {key}: {val!r} (expected float)")
 
@@ -48,21 +48,21 @@ class Config:
 
     # Shared options loaded from CLI, env, or XDG config.
     model: str = field(
-        default_factory=lambda: os.environ.get("COMMITTER_MODEL", DEFAULT_MODEL)
+        default_factory=lambda: os.environ.get("AUTOCOMMIT_MODEL", DEFAULT_MODEL)
     )
     reasoning_effort: str = field(
         default_factory=lambda: os.environ.get(
-            "COMMITTER_REASONING_EFFORT", DEFAULT_REASONING_EFFORT
+            "AUTOCOMMIT_REASONING_EFFORT", DEFAULT_REASONING_EFFORT
         )
     )
     max_diff_chars: int = field(
-        default_factory=lambda: _env_int("COMMITTER_MAX_DIFF_CHARS", 12000)
+        default_factory=lambda: _env_int("AUTOCOMMIT_MAX_DIFF_CHARS", 12000)
     )
     timeout: float = field(
-        default_factory=lambda: _env_float("COMMITTER_TIMEOUT", 10.0)
+        default_factory=lambda: _env_float("AUTOCOMMIT_TIMEOUT", 10.0)
     )
     bulk_threshold: int = field(
-        default_factory=lambda: _env_int("COMMITTER_BULK_THRESHOLD", 50)
+        default_factory=lambda: _env_int("AUTOCOMMIT_BULK_THRESHOLD", 50)
     )
     force_ai: bool = False
 
@@ -84,10 +84,10 @@ class Config:
     fallback: str | None = None
 
     def __post_init__(self) -> None:
-        from committer.console import die
+        from autocommit.console import die
 
         if not self.model or not self.model.strip():
-            die("model cannot be empty; check COMMITTER_MODEL or --model")
+            die("model cannot be empty; check AUTOCOMMIT_MODEL or --model")
         if self.reasoning_effort not in REASONING_EFFORT_CHOICES:
             die(
                 f"invalid reasoning_effort {self.reasoning_effort!r};"

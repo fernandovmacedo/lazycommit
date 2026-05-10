@@ -299,7 +299,7 @@ wheels = [
 ]
 
 [[package]]
-name = "committer"
+name = "autocommit"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [

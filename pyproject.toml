@@ -1,5 +1,5 @@
 [project]
-name = "committer"
+name = "autocommit"
 version = "1.0.0"
 description = "AI-assisted git commit and history rewrite CLI for Conventional Commits"
 readme = "README.md"
@@ -28,11 +28,11 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/fernandovmacedo/committer"
-Repository = "https://github.com/fernandovmacedo/committer"
+Homepage = "https://github.com/fernandovmacedo/autocommit"
+Repository = "https://github.com/fernandovmacedo/autocommit"
 
 [project.scripts]
-committer = "committer:main"
+autocommit = "autocommit:main"
 
 [build-system]
 requires = ["hatchling"]

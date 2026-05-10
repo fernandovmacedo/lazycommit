@@ -1,8 +1,8 @@
-"""Entry point for python -m committer."""
+"""Entry point for python -m autocommit."""
 
 import sys
 
-from committer import main
+from autocommit import main
 
 if __name__ == "__main__":
     sys.exit(main())

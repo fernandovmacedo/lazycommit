@@ -8,9 +8,9 @@ import subprocess
 import tempfile
 from contextlib import suppress
 
-from committer.console import die
-from committer.constants import _CONVENTIONAL_RE, DIFF_EXCLUDE_PATTERNS, GIT_TIMEOUT_S
-from committer.git import build_user_context, run_git, truncate_diff
+from autocommit.console import die
+from autocommit.constants import _CONVENTIONAL_RE, DIFF_EXCLUDE_PATTERNS, GIT_TIMEOUT_S
+from autocommit.git import build_user_context, run_git, truncate_diff
 
 
 def _is_conventional(message: str) -> bool:
