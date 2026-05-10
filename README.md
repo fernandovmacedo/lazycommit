@@ -240,7 +240,7 @@ Config precedence is CLI flag > environment variable > XDG config > hardcoded de
 
 If `.autocommit.md` exists at the repository root, its contents are prepended to the generated user prompt. Use `--context path/to/file.md` to point at a different UTF-8 file.
 
-## Similar Projects
+## Alternatives
 
 Manual `git commit` is still the right choice when you already know the exact message you want and do not need AI help or rewrite support.
 
@@ -253,7 +253,7 @@ Other AI commit message tools may generate a subject line, but `autocommit` is o
 - Bulk changes can bypass AI automatically.
 - `rewrite` can clean up older commit history, not just the next commit.
 
-Choose `autocommit` when you want a small tool focused on reliable Conventional Commits rather than a general-purpose coding assistant.
+Choose `autocommit` when you want a small tool focused on reliable Conventional Commits rather than a general-purpose coding assistant. You can also add it to hooks in your agent to save tokens.
 
 ## Development
 
