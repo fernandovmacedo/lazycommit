@@ -13,6 +13,18 @@ When AI generation is unavailable, times out, returns invalid structured output,
 
 Compared with asking a general coding agent to commit for you, it is narrower on purpose: one CLI, one job, Conventional Commit output, a deterministic fallback, and a rewrite mode for cleaning up existing history.
 
+## Default AI Model
+
+By default, `lazycommit` uses `google/gemini-3.1-flash-lite`.
+
+That is the hardcoded default because it fits the tool's goal well: short commit-generation requests benefit more from low latency and low cost than from a larger, slower model. In practice, this keeps commit generation fast and cheap while still handling structured outputs reliably.
+
+The model is customizable. You can override the default with `-m, --model`, `LAZYCOMMIT_MODEL`, or `model = "..."` in `~/.config/lazycommit/config.toml`.
+
+`lazycommit` also defaults `reasoning_effort` to `none`. For commit generation, extra reasoning usually adds cost and latency more than it adds value, so reasoning is turned off by default to keep requests cheaper and faster. You can override that with `-r, --reasoning-effort`, `LAZYCOMMIT_REASONING_EFFORT`, or `reasoning_effort = "..."` in config.
+
+At the time of writing, Google lists Gemini 3.1 Flash-Lite at `$0.25 / 1M input tokens` and `$1.50 / 1M output tokens`:
+
 ## Quick Start
 
 Requirements:
