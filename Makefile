@@ -29,11 +29,11 @@ ci: lint typecheck test-py311 test-py314
 
 ## Run Ruff against the package and tests.
 lint:
-	uv run ruff check autocommit/ tests/
+	uv run ruff check lazycommit/ tests/
 
 ## Run strict mypy over the package.
 typecheck:
-	uv run mypy autocommit/
+	uv run mypy lazycommit/
 
 ## Run the test suite on the oldest supported Python in CI.
 test-py311:

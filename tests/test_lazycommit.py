@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 
-import lazycommit as autocommit
+import lazycommit
 from lazycommit import Config, flows
 from lazycommit import api as api_module
 from lazycommit import git as git_module
@@ -24,7 +24,7 @@ _CUSTOM_MODEL = "google/gemini-3.1-flash-lite"
 
 def _fake_commit_response(
     *_a: object, **_kw: object
-) -> tuple[CommitMessage, autocommit.UsageStats | None]:
+) -> tuple[CommitMessage, lazycommit.UsageStats | None]:
     """Mock return value for generate_commit_json."""
     return _FAKE_COMMIT, None
 
@@ -78,7 +78,7 @@ def parsed_rewrite_args(**overrides: object) -> Config:
 
 
 def test_assemble_message_no_scope() -> None:
-    msg = autocommit.assemble_message(
+    msg = lazycommit.assemble_message(
         CommitMessage(type="feat", scope="", subject="add thing", body=""),
         parsed_args(),
     )
@@ -86,7 +86,7 @@ def test_assemble_message_no_scope() -> None:
 
 
 def test_assemble_message_with_scope() -> None:
-    msg = autocommit.assemble_message(
+    msg = lazycommit.assemble_message(
         CommitMessage(type="feat", scope="api", subject="add thing", body=""),
         parsed_args(),
     )
@@ -94,7 +94,7 @@ def test_assemble_message_with_scope() -> None:
 
 
 def test_assemble_message_with_body() -> None:
-    msg = autocommit.assemble_message(
+    msg = lazycommit.assemble_message(
         CommitMessage(type="feat", scope="", subject="add thing", body="why"),
         parsed_args(),
     )
@@ -102,7 +102,7 @@ def test_assemble_message_with_body() -> None:
 
 
 def test_assemble_message_no_body_flag() -> None:
-    msg = autocommit.assemble_message(
+    msg = lazycommit.assemble_message(
         CommitMessage(type="feat", scope="", subject="add thing", body="why"),
         parsed_args(no_body=True),
     )
@@ -110,7 +110,7 @@ def test_assemble_message_no_body_flag() -> None:
 
 
 def test_assemble_message_type_override() -> None:
-    msg = autocommit.assemble_message(
+    msg = lazycommit.assemble_message(
         CommitMessage(type="feat", scope="", subject="add thing", body=""),
         parsed_args(type="fix"),
     )
@@ -123,7 +123,7 @@ def test_assemble_message_empty_type_override_rejected() -> None:
 
 
 def test_assemble_message_scope_override() -> None:
-    msg = autocommit.assemble_message(
+    msg = lazycommit.assemble_message(
         CommitMessage(type="feat", scope="", subject="add thing", body=""),
         parsed_args(scope="db"),
     )
@@ -142,7 +142,7 @@ def test_commit_message_invalid_model_scope_rejected() -> None:
 
 def test_assemble_message_truncates_header_to_72() -> None:
     long_subject = "a" * 200
-    msg = autocommit.assemble_message(
+    msg = lazycommit.assemble_message(
         CommitMessage(type="feat", scope="api", subject=long_subject, body=""),
         parsed_args(),
     )
@@ -150,7 +150,7 @@ def test_assemble_message_truncates_header_to_72() -> None:
 
 
 def test_assemble_message_truncates_at_word_boundary() -> None:
-    msg = autocommit.assemble_message(
+    msg = lazycommit.assemble_message(
         CommitMessage(
             type="feat",
             scope="long-scope-name",
@@ -169,40 +169,40 @@ def test_assemble_message_truncates_at_word_boundary() -> None:
 
 
 def test_build_fallback_empty() -> None:
-    assert autocommit.build_fallback_message([]) == "chore: update project files"
+    assert lazycommit.build_fallback_message([]) == "chore: update project files"
 
 
 def test_build_fallback_test_files() -> None:
-    msg = autocommit.build_fallback_message(
+    msg = lazycommit.build_fallback_message(
         ["M\ttests/test_api.py", "A\tspec/auth_spec.py"]
     )
     assert msg.startswith("test:") or msg.startswith("test(")
 
 
 def test_build_fallback_doc_files() -> None:
-    msg = autocommit.build_fallback_message(["M\tREADME.md", "A\tdocs/guide.rst"])
+    msg = lazycommit.build_fallback_message(["M\tREADME.md", "A\tdocs/guide.rst"])
     assert msg.startswith("docs:") or msg.startswith("docs(")
 
 
 def test_build_fallback_mixed() -> None:
-    msg = autocommit.build_fallback_message(["M\tREADME.md", "A\tsrc/app.py"])
+    msg = lazycommit.build_fallback_message(["M\tREADME.md", "A\tsrc/app.py"])
     assert msg.startswith("chore:") or msg.startswith("chore(")
 
 
 def test_build_fallback_scope_from_dir() -> None:
-    msg = autocommit.build_fallback_message(
+    msg = lazycommit.build_fallback_message(
         ["M\tsrc/app.py", "A\tsrc/api.py", "A\tdocs/x.md"]
     )
     assert msg.startswith("chore(src):")
 
 
 def test_build_fallback_header_fits_72() -> None:
-    msg = autocommit.build_fallback_message(["M\tsrc/" + ("x" * 200) + ".py"])
+    msg = lazycommit.build_fallback_message(["M\tsrc/" + ("x" * 200) + ".py"])
     assert len(msg) <= 72
 
 
 def test_build_fallback_truncates_at_word_boundary() -> None:
-    msg = autocommit.build_fallback_message(
+    msg = lazycommit.build_fallback_message(
         ["M\tsrc/api.py", "M\tsrc/cli.py", "M\tsrc/config.py"]
     )
     assert msg == "chore(src): update src with staged changes"
@@ -210,14 +210,14 @@ def test_build_fallback_truncates_at_word_boundary() -> None:
 
 def test_truncate_diff_short() -> None:
     diff = "line1\nline2"
-    out, truncated = autocommit.truncate_diff(diff, 12000)
+    out, truncated = lazycommit.truncate_diff(diff, 12000)
     assert out == diff
     assert truncated is False
 
 
 def test_truncate_diff_long() -> None:
     diff = "a\n" * 100
-    out, truncated = autocommit.truncate_diff(diff, 30)
+    out, truncated = lazycommit.truncate_diff(diff, 30)
     assert truncated is True
     assert len(out) <= 30
     assert not out.endswith("\n")
@@ -225,7 +225,7 @@ def test_truncate_diff_long() -> None:
 
 def test_truncate_diff_preserves_trailing_spaces() -> None:
     diff = "keep  \nnext line\n"
-    out, truncated = autocommit.truncate_diff(diff, len("keep  \nnext"))
+    out, truncated = lazycommit.truncate_diff(diff, len("keep  \nnext"))
     assert truncated is True
     assert out == "keep  "
 
@@ -233,17 +233,17 @@ def test_truncate_diff_preserves_trailing_spaces() -> None:
 def test_load_context_file_explicit(tmp_path: Path) -> None:
     f = tmp_path / "ctx.md"
     f.write_text("hello", encoding="utf-8")
-    assert autocommit.load_context_file(str(f), str(tmp_path)) == "hello"
+    assert lazycommit.load_context_file(str(f), str(tmp_path)) == "hello"
 
 
 def test_load_context_file_auto_discovery(tmp_path: Path) -> None:
     f = tmp_path / ".lazycommit.md"
     f.write_text("auto", encoding="utf-8")
-    assert autocommit.load_context_file(None, str(tmp_path)) == "auto"
+    assert lazycommit.load_context_file(None, str(tmp_path)) == "auto"
 
 
 def test_load_context_file_missing(tmp_path: Path) -> None:
-    assert autocommit.load_context_file(None, str(tmp_path)) == ""
+    assert lazycommit.load_context_file(None, str(tmp_path)) == ""
 
 
 def test_load_context_file_invalid_utf8_warns(
@@ -254,7 +254,7 @@ def test_load_context_file_invalid_utf8_warns(
     warnings: list[str] = []
     monkeypatch.setattr(git_module, "warn", lambda msg: warnings.append(msg))
 
-    assert autocommit.load_context_file(str(f), str(tmp_path)) == ""
+    assert lazycommit.load_context_file(str(f), str(tmp_path)) == ""
     assert warnings == [
         f"cannot read context file {f}: not valid UTF-8 (invalid start byte)"
     ]
@@ -276,7 +276,7 @@ def test_load_context_file_oserror_warns(
 
     monkeypatch.setattr("builtins.open", fake_open)
 
-    assert autocommit.load_context_file(str(f), str(tmp_path)) == ""
+    assert lazycommit.load_context_file(str(f), str(tmp_path)) == ""
     assert warnings == [f"cannot read context file {f}: permission denied"]
 
 
@@ -285,11 +285,11 @@ def test_load_context_file_explicit_takes_priority(tmp_path: Path) -> None:
     auto = tmp_path / ".lazycommit.md"
     explicit.write_text("explicit", encoding="utf-8")
     auto.write_text("auto", encoding="utf-8")
-    assert autocommit.load_context_file(str(explicit), str(tmp_path)) == "explicit"
+    assert lazycommit.load_context_file(str(explicit), str(tmp_path)) == "explicit"
 
 
 def test_build_user_context_no_context() -> None:
-    ctx = autocommit.build_user_context(
+    ctx = lazycommit.build_user_context(
         "", "main", "c1", ["M\ta.py"], "stat", "diff", False
     )
     assert "---" not in ctx
@@ -297,7 +297,7 @@ def test_build_user_context_no_context() -> None:
 
 
 def test_build_user_context_with_context() -> None:
-    ctx = autocommit.build_user_context(
+    ctx = lazycommit.build_user_context(
         "project rules", "main", "c1", ["M\ta.py"], "stat", "diff", False
     )
     assert ctx.startswith("project rules\n---\n\nBranch: main")
@@ -309,7 +309,7 @@ def test_has_staged_changes_true(monkeypatch: pytest.MonkeyPatch) -> None:
         "run",
         lambda *a, **k: SimpleNamespace(returncode=1),
     )
-    assert autocommit.has_staged_changes() is True
+    assert lazycommit.has_staged_changes() is True
 
 
 def test_run_git_uses_replace_for_invalid_utf8(
@@ -322,7 +322,7 @@ def test_run_git_uses_replace_for_invalid_utf8(
         return SimpleNamespace(returncode=0, stdout="ok\n")
 
     monkeypatch.setattr(git_module.subprocess, "run", fake_run)
-    assert autocommit.run_git("status", "--porcelain") == "ok"
+    assert lazycommit.run_git("status", "--porcelain") == "ok"
     assert captured_kwargs["encoding"] == "utf-8"
     assert captured_kwargs["errors"] == "replace"
 
@@ -332,7 +332,7 @@ def test_run_git_timeout_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
         raise git_module.subprocess.TimeoutExpired(cmd=["git"], timeout=30)
 
     monkeypatch.setattr(git_module.subprocess, "run", fake_run)
-    assert autocommit.run_git("status") is None
+    assert lazycommit.run_git("status") is None
 
 
 def test_has_staged_changes_false(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -341,7 +341,7 @@ def test_has_staged_changes_false(monkeypatch: pytest.MonkeyPatch) -> None:
         "run",
         lambda *a, **k: SimpleNamespace(returncode=0),
     )
-    assert autocommit.has_staged_changes() is False
+    assert lazycommit.has_staged_changes() is False
 
 
 def test_has_staged_changes_timeout_returns_false(
@@ -351,7 +351,7 @@ def test_has_staged_changes_timeout_returns_false(
         raise git_module.subprocess.TimeoutExpired(cmd=["git"], timeout=30)
 
     monkeypatch.setattr(git_module.subprocess, "run", fake_run)
-    assert autocommit.has_staged_changes() is False
+    assert lazycommit.has_staged_changes() is False
 
 
 def test_auto_stage_stages_when_nothing_staged(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -364,7 +364,7 @@ def test_auto_stage_stages_when_nothing_staged(monkeypatch: pytest.MonkeyPatch) 
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(git_module.subprocess, "run", fake_run)
-    autocommit.auto_stage([])
+    lazycommit.auto_stage([])
     assert ["git", "add", "-A"] in calls
 
 
@@ -378,7 +378,7 @@ def test_auto_stage_skips_when_already_staged(monkeypatch: pytest.MonkeyPatch) -
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(git_module.subprocess, "run", fake_run)
-    autocommit.auto_stage([])
+    lazycommit.auto_stage([])
     assert ["git", "add", "-A"] not in calls
 
 
@@ -392,7 +392,7 @@ def test_auto_stage_timeout_returns_false(monkeypatch: pytest.MonkeyPatch) -> No
         raise git_module.subprocess.TimeoutExpired(cmd=cmd, timeout=30)
 
     monkeypatch.setattr(git_module.subprocess, "run", fake_run)
-    assert autocommit.auto_stage([]) is False
+    assert lazycommit.auto_stage([]) is False
     assert ["git", "add", "-A"] in calls
 
 
@@ -408,7 +408,7 @@ def test_auto_stage_timeout_warns(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(git_module, "log_warning", log_warnings.append)
     monkeypatch.setattr(git_module, "warn", warnings.append)
 
-    autocommit.auto_stage([])
+    lazycommit.auto_stage([])
 
     assert log_warnings[-1] == "git add -A timed out after 30s"
     assert warnings[-1] == "git add -A timed out after 30s; commit was not created"
@@ -435,7 +435,7 @@ def test_generate_commit_json_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(api_module.instructor, "from_litellm", fake_from_litellm)
 
-    commit_msg, stats = autocommit.generate_commit_json(
+    commit_msg, stats = lazycommit.generate_commit_json(
         "k", "m", DEFAULT_REASONING_EFFORT, "sp", CommitMessage, "ctx", 1.0
     )
     assert commit_msg.type == "feat"
@@ -472,7 +472,7 @@ def test_generate_commit_json_invalid_usage_detail_defaults_to_zero(
         lambda _fn, **_kwargs: FakeInstructorClient(),
     )
 
-    _, stats = autocommit.generate_commit_json(
+    _, stats = lazycommit.generate_commit_json(
         "k", "m", DEFAULT_REASONING_EFFORT, "sp", CommitMessage, "ctx", 1.0
     )
 
@@ -505,7 +505,7 @@ def test_generate_commit_json_passes_model_params(
         lambda _fn, **_kwargs: FakeInstructorClient(),
     )
 
-    autocommit.generate_commit_json(
+    lazycommit.generate_commit_json(
         "k",
         _CUSTOM_MODEL,
         DEFAULT_REASONING_EFFORT,
@@ -536,15 +536,15 @@ def test_generate_commit_json_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     with pytest.raises(TimeoutError):
-        autocommit.generate_commit_json(
+        lazycommit.generate_commit_json(
             "k", "m", DEFAULT_REASONING_EFFORT, "sp", CommitMessage, "ctx", 1.0
         )
 
 
 def test_usage_stats_add_accumulates_cost_from_none() -> None:
-    stats = autocommit.UsageStats(1, 2)
+    stats = lazycommit.UsageStats(1, 2)
 
-    stats.add(autocommit.UsageStats(3, 4, 0.25))
+    stats.add(lazycommit.UsageStats(3, 4, 0.25))
 
     assert stats.cost == 0.25
 
@@ -555,7 +555,7 @@ def test_commit_changes_pass(monkeypatch: pytest.MonkeyPatch) -> None:
         "run",
         lambda *a, **k: SimpleNamespace(returncode=0),
     )
-    assert autocommit.commit_changes("msg", ()) == 0
+    assert lazycommit.commit_changes("msg", ()) == 0
 
 
 def test_commit_changes_hook_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -564,7 +564,7 @@ def test_commit_changes_hook_failure(monkeypatch: pytest.MonkeyPatch) -> None:
         "run",
         lambda *a, **k: SimpleNamespace(returncode=1),
     )
-    assert autocommit.commit_changes("msg", ()) == 1
+    assert lazycommit.commit_changes("msg", ()) == 1
 
 
 def test_commit_changes_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -578,7 +578,7 @@ def test_commit_changes_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(flows, "warn", warnings.append)
     monkeypatch.setattr(flows, "log_warning", log_warnings.append)
 
-    assert autocommit.commit_changes("msg", ()) == 1
+    assert lazycommit.commit_changes("msg", ()) == 1
     assert warnings == ["git commit timed out after 300s"]
     assert log_warnings == ["git_commit timed out after 300s"]
 
@@ -587,8 +587,8 @@ def test_main_dry_run(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
-    monkeypatch.setattr(autocommit, "parse_args", lambda: parsed_args(dry_run=True))
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "parse_args", lambda: parsed_args(dry_run=True))
     monkeypatch.setattr(flows, "auto_stage", lambda git_args: None)
     monkeypatch.setattr(flows, "has_staged_changes", lambda: True)
     monkeypatch.setattr(flows, "get_staged_files", lambda: ["M\tsrc/app.py"])
@@ -604,7 +604,7 @@ def test_main_dry_run(
     )
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
 
-    code = autocommit.main()
+    code = lazycommit.main()
     out = capsys.readouterr().out
     assert code == 0
     assert "feat: add x" in out
@@ -614,9 +614,9 @@ def test_main_verbose_shows_full_api_messages(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
     monkeypatch.setattr(
-        autocommit, "parse_args", lambda: parsed_args(dry_run=True, verbose=True)
+        lazycommit, "parse_args", lambda: parsed_args(dry_run=True, verbose=True)
     )
     monkeypatch.setattr(flows, "auto_stage", lambda git_args: None)
     monkeypatch.setattr(flows, "has_staged_changes", lambda: True)
@@ -633,7 +633,7 @@ def test_main_verbose_shows_full_api_messages(
     )
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
 
-    code = autocommit.main()
+    code = lazycommit.main()
     out = capsys.readouterr().out
     assert code == 0
     assert "model:" in out
@@ -646,9 +646,9 @@ def test_verbose_truncation_note(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
     monkeypatch.setattr(
-        autocommit,
+        lazycommit,
         "parse_args",
         lambda: parsed_args(dry_run=True, verbose=True, max_diff_chars=5),
     )
@@ -667,7 +667,7 @@ def test_verbose_truncation_note(
     )
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
 
-    code = autocommit.main()
+    code = lazycommit.main()
     out = capsys.readouterr().out
     assert code == 0
     assert "truncated from" in out
@@ -675,8 +675,8 @@ def test_verbose_truncation_note(
 
 def test_main_no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
-    monkeypatch.setattr(autocommit, "parse_args", lambda: parsed_args())
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "parse_args", lambda: parsed_args())
     monkeypatch.setattr(flows, "auto_stage", lambda git_args: None)
     monkeypatch.setattr(flows, "has_staged_changes", lambda: True)
     monkeypatch.setattr(flows, "get_staged_files", lambda: ["M\tREADME.md"])
@@ -689,15 +689,15 @@ def test_main_no_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(flows, "commit_changes", commit_mock)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
-    code = autocommit.main()
+    code = lazycommit.main()
     assert code == 0
     assert commit_mock.called
 
 
 def test_main_push_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
-    monkeypatch.setattr(autocommit, "parse_args", lambda: parsed_args(push=True))
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "parse_args", lambda: parsed_args(push=True))
     monkeypatch.setattr(flows, "auto_stage", lambda git_args: None)
     monkeypatch.setattr(flows, "has_staged_changes", lambda: True)
     monkeypatch.setattr(flows, "get_staged_files", lambda: ["M\tsrc/app.py"])
@@ -722,16 +722,16 @@ def test_main_push_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(flows.subprocess, "run", fake_run)
 
-    code = autocommit.main()
+    code = lazycommit.main()
     assert code == 0
     assert ["git", "push"] in calls
 
 
 def test_main_push_skipped_on_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
     monkeypatch.setattr(
-        autocommit, "parse_args", lambda: parsed_args(dry_run=True, push=True)
+        lazycommit, "parse_args", lambda: parsed_args(dry_run=True, push=True)
     )
     monkeypatch.setattr(flows, "auto_stage", lambda git_args: None)
     monkeypatch.setattr(flows, "has_staged_changes", lambda: True)
@@ -756,7 +756,7 @@ def test_main_push_skipped_on_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(flows.subprocess, "run", fake_run)
 
-    code = autocommit.main()
+    code = lazycommit.main()
     assert code == 0
     assert ["git", "push"] not in calls
 
@@ -771,7 +771,7 @@ def test_load_xdg_config_ignores_api_key(
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
-    autocommit.load_xdg_config()
+    lazycommit.load_xdg_config()
 
     assert os.environ.get("OPENROUTER_API_KEY") is None
 
@@ -786,7 +786,7 @@ def test_load_xdg_config_leaves_existing_api_key_unchanged(
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     monkeypatch.setenv("OPENROUTER_API_KEY", "existing")
 
-    autocommit.load_xdg_config()
+    lazycommit.load_xdg_config()
 
     assert os.environ.get("OPENROUTER_API_KEY") == "existing"
 
@@ -802,7 +802,7 @@ def test_load_xdg_config_defaults_to_home_config(
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("LAZYCOMMIT_MODEL", raising=False)
 
-    autocommit.load_xdg_config()
+    lazycommit.load_xdg_config()
 
     assert os.environ.get("LAZYCOMMIT_MODEL") == "test-model"
 
@@ -817,7 +817,7 @@ def test_load_xdg_config_reasoning_effort(
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     monkeypatch.delenv("LAZYCOMMIT_REASONING_EFFORT", raising=False)
 
-    autocommit.load_xdg_config()
+    lazycommit.load_xdg_config()
 
     assert os.environ.get("LAZYCOMMIT_REASONING_EFFORT") == "none"
 
@@ -829,7 +829,7 @@ def test_load_xdg_config_handles_missing_file(
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     # Should not raise, just return silently
-    autocommit.load_xdg_config()
+    lazycommit.load_xdg_config()
 
     assert os.environ.get("OPENROUTER_API_KEY") is None
 
@@ -846,7 +846,7 @@ def test_load_xdg_config_handles_invalid_toml(
     warn_mock = Mock()
     monkeypatch.setattr(git_module, "warn", warn_mock)
 
-    autocommit.load_xdg_config()
+    lazycommit.load_xdg_config()
 
     assert os.environ.get("OPENROUTER_API_KEY") is None
     warn_mock.assert_called_once()
@@ -873,7 +873,7 @@ def test_load_xdg_config_oserror(
 
     monkeypatch.setattr("builtins.open", fake_open)
 
-    autocommit.load_xdg_config()
+    lazycommit.load_xdg_config()
 
     warn_mock.assert_called_once()
     assert "config.toml is unreadable" in warn_mock.call_args[0][0]
@@ -944,7 +944,7 @@ def test_load_xdg_config_converts_numbers_to_strings(
     monkeypatch.delenv("LAZYCOMMIT_MAX_DIFF_CHARS", raising=False)
     monkeypatch.delenv("LAZYCOMMIT_TIMEOUT", raising=False)
 
-    autocommit.load_xdg_config()
+    lazycommit.load_xdg_config()
 
     assert os.environ.get("LAZYCOMMIT_MAX_DIFF_CHARS") == "5000"
     assert os.environ.get("LAZYCOMMIT_TIMEOUT") == "15.5"
@@ -954,12 +954,12 @@ def test_main_nothing_to_commit(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
-    monkeypatch.setattr(autocommit, "parse_args", lambda: parsed_args())
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "parse_args", lambda: parsed_args())
     monkeypatch.setattr(flows, "auto_stage", lambda git_args: None)
     monkeypatch.setattr(flows, "has_staged_changes", lambda: False)
 
-    assert autocommit.main() == 0
+    assert lazycommit.main() == 0
     assert "nothing to commit" in capsys.readouterr().out
 
 
@@ -971,31 +971,31 @@ def test_commit_flow_returns_error_when_auto_stage_fails(
     staged_check = Mock()
     monkeypatch.setattr(flows, "has_staged_changes", staged_check)
 
-    assert autocommit._commit_flow(parsed_args()) == 1
+    assert lazycommit._commit_flow(parsed_args()) == 1
     staged_check.assert_not_called()
 
 
 def test_main_not_repo(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
-    monkeypatch.setattr(autocommit, "parse_args", lambda: parsed_args())
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "parse_args", lambda: parsed_args())
     monkeypatch.setattr(flows, "get_repo_root", lambda: None)
     with pytest.raises(SystemExit) as exc:
-        autocommit.main()
+        lazycommit.main()
     assert exc.value.code == 1
 
 
 def test_is_conventional_true() -> None:
-    assert autocommit._is_conventional("feat: add x")
-    assert autocommit._is_conventional("fix(api): patch timeout")
-    assert autocommit._is_conventional("feat(): allow empty scope")
-    assert autocommit._is_conventional("chore!: drop old flow")
-    assert autocommit._is_conventional("revert: rollback release")
+    assert lazycommit._is_conventional("feat: add x")
+    assert lazycommit._is_conventional("fix(api): patch timeout")
+    assert lazycommit._is_conventional("feat(): allow empty scope")
+    assert lazycommit._is_conventional("chore!: drop old flow")
+    assert lazycommit._is_conventional("revert: rollback release")
 
 
 def test_is_conventional_false() -> None:
-    assert not autocommit._is_conventional("update stuff")
-    assert not autocommit._is_conventional("wip: try things")
-    assert not autocommit._is_conventional("just text")
+    assert not lazycommit._is_conventional("update stuff")
+    assert not lazycommit._is_conventional("wip: try things")
+    assert not lazycommit._is_conventional("just text")
 
 
 def test_get_rewrite_shas_all(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1006,7 +1006,7 @@ def test_get_rewrite_shas_all(monkeypatch: pytest.MonkeyPatch) -> None:
         if args == ("log", "--format=%H", "--reverse")
         else "",
     )
-    out = autocommit._get_rewrite_shas(
+    out = lazycommit._get_rewrite_shas(
         None, all_commits=True, non_conventional=False, unpushed=False
     )
     assert out == ["a1", "b2", "c3"]
@@ -1020,7 +1020,7 @@ def test_get_rewrite_shas_from_sha(monkeypatch: pytest.MonkeyPatch) -> None:
         return SimpleNamespace(returncode=0, stdout="b2\nc3\n")
 
     monkeypatch.setattr(rewrite_module.subprocess, "run", fake_run)
-    out = autocommit._get_rewrite_shas(
+    out = lazycommit._get_rewrite_shas(
         "b2", all_commits=False, non_conventional=False, unpushed=False
     )
     assert out == ["b2", "c3"]
@@ -1066,7 +1066,7 @@ def test_get_rewrite_shas_non_conventional(monkeypatch: pytest.MonkeyPatch) -> N
         return None
 
     monkeypatch.setattr(rewrite_module, "run_git", fake_run_git)
-    out = autocommit._get_rewrite_shas(
+    out = lazycommit._get_rewrite_shas(
         None, all_commits=False, non_conventional=True, unpushed=False
     )
     assert out == ["b2"]
@@ -1074,7 +1074,7 @@ def test_get_rewrite_shas_non_conventional(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_get_rewrite_shas_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(rewrite_module, "run_git", lambda *args: None)
-    out = autocommit._get_rewrite_shas(
+    out = lazycommit._get_rewrite_shas(
         None, all_commits=False, non_conventional=True, unpushed=False
     )
     assert out == []
@@ -1088,7 +1088,7 @@ def test_get_rewrite_shas_unpushed(monkeypatch: pytest.MonkeyPatch) -> None:
         return SimpleNamespace(returncode=0, stdout="a1\nb2\n")
 
     monkeypatch.setattr(rewrite_module.subprocess, "run", fake_run)
-    out = autocommit._get_rewrite_shas(
+    out = lazycommit._get_rewrite_shas(
         None, all_commits=False, non_conventional=False, unpushed=True
     )
     assert out == ["a1", "b2"]
@@ -1104,7 +1104,7 @@ def test_get_rewrite_shas_unpushed_no_upstream(monkeypatch: pytest.MonkeyPatch) 
         rewrite_module, "die", lambda msg: (_ for _ in ()).throw(SystemExit(msg))
     )
     with pytest.raises(SystemExit, match="no upstream configured"):
-        autocommit._get_rewrite_shas(
+        lazycommit._get_rewrite_shas(
             None, all_commits=False, non_conventional=False, unpushed=True
         )
 
@@ -1114,7 +1114,7 @@ def test_get_rewrite_shas_unpushed_empty(monkeypatch: pytest.MonkeyPatch) -> Non
         return SimpleNamespace(returncode=0, stdout="")
 
     monkeypatch.setattr(rewrite_module.subprocess, "run", fake_run)
-    out = autocommit._get_rewrite_shas(
+    out = lazycommit._get_rewrite_shas(
         None, all_commits=False, non_conventional=False, unpushed=True
     )
     assert out == []
@@ -1130,7 +1130,7 @@ def test_get_rewrite_shas_from_sha_timeout(monkeypatch: pytest.MonkeyPatch) -> N
     )
 
     with pytest.raises(SystemExit, match="timed out collecting commits"):
-        autocommit._get_rewrite_shas(
+        lazycommit._get_rewrite_shas(
             "abc123", all_commits=False, non_conventional=False, unpushed=False
         )
 
@@ -1145,7 +1145,7 @@ def test_get_rewrite_shas_unpushed_timeout(monkeypatch: pytest.MonkeyPatch) -> N
     )
 
     with pytest.raises(SystemExit, match="timed out collecting unpushed commits"):
-        autocommit._get_rewrite_shas(
+        lazycommit._get_rewrite_shas(
             None, all_commits=False, non_conventional=False, unpushed=True
         )
 
@@ -1153,7 +1153,7 @@ def test_get_rewrite_shas_unpushed_timeout(monkeypatch: pytest.MonkeyPatch) -> N
 def test_ensure_clean_worktree_allows_clean(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(rewrite_module, "run_git", lambda *args: "")
 
-    autocommit._ensure_clean_worktree()
+    lazycommit._ensure_clean_worktree()
 
 
 def test_ensure_clean_worktree_rejects_dirty(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1163,7 +1163,7 @@ def test_ensure_clean_worktree_rejects_dirty(monkeypatch: pytest.MonkeyPatch) ->
     )
 
     with pytest.raises(SystemExit, match="clean worktree"):
-        autocommit._ensure_clean_worktree()
+        lazycommit._ensure_clean_worktree()
 
 
 def test_build_commit_context(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1186,7 +1186,7 @@ def test_build_commit_context(monkeypatch: pytest.MonkeyPatch) -> None:
         return None
 
     monkeypatch.setattr(rewrite_module, "run_git", fake_run_git)
-    ctx = autocommit._build_commit_context("abc123", "main", 12000)
+    ctx = lazycommit._build_commit_context("abc123", "main", 12000)
     assert "Rewriting existing commit." in ctx
     assert "Current message:\nold message" in ctx
     assert "Branch: main" in ctx
@@ -1204,7 +1204,7 @@ def test_apply_filter_repo(monkeypatch: pytest.MonkeyPatch) -> None:
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(rewrite_module.subprocess, "run", fake_run)
-    autocommit._apply_filter_repo({"abc123": "feat: add x"})
+    lazycommit._apply_filter_repo({"abc123": "feat: add x"})
 
     assert calls
     assert calls[0][:4] == ["git", "filter-repo", "--force", "--commit-callback"]
@@ -1222,7 +1222,7 @@ def test_apply_filter_repo_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     with pytest.raises(SystemExit, match=r"git filter-repo failed \(exit 1\)"):
-        autocommit._apply_filter_repo({"abc123": "feat: add x"})
+        lazycommit._apply_filter_repo({"abc123": "feat: add x"})
 
 
 def test_rewrite_flow_dry_run(
@@ -1230,7 +1230,7 @@ def test_rewrite_flow_dry_run(
 ) -> None:
     monkeypatch.setattr(flows, "_check_filter_repo", lambda: None)
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
     monkeypatch.setattr(flows, "_get_rewrite_shas", lambda *_a, **_k: ["a1"])
     monkeypatch.setattr(flows, "get_branch_name", lambda: "main")
     monkeypatch.setattr(flows, "_build_commit_context", lambda *_a, **_k: "ctx")
@@ -1248,7 +1248,7 @@ def test_rewrite_flow_dry_run(
         flows, "_apply_filter_repo", mark_applied
     )
 
-    code = autocommit._rewrite_flow(parsed_rewrite_args(dry_run=True))
+    code = lazycommit._rewrite_flow(parsed_rewrite_args(dry_run=True))
     out = capsys.readouterr().out
     assert code == 0
     assert "a1" in out
@@ -1260,7 +1260,7 @@ def test_rewrite_flow_applies(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(flows, "_check_filter_repo", lambda: None)
     monkeypatch.setattr(flows, "_ensure_clean_worktree", lambda: None)
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
     monkeypatch.setattr(flows, "_get_rewrite_shas", lambda *_a, **_k: ["a1", "b2"])
     monkeypatch.setattr(flows, "get_branch_name", lambda: "main")
     monkeypatch.setattr(flows, "_build_commit_context", lambda *_a, **_k: "ctx")
@@ -1277,7 +1277,7 @@ def test_rewrite_flow_applies(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(flows, "_apply_filter_repo", capture_map)
 
-    code = autocommit._rewrite_flow(parsed_rewrite_args())
+    code = lazycommit._rewrite_flow(parsed_rewrite_args())
     assert code == 0
     assert captured == {"a1": "feat: add x", "b2": "feat: add x"}
 
@@ -1294,7 +1294,7 @@ def test_rewrite_flow_rejects_dirty_worktree(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(flows, "_get_rewrite_shas", get_shas)
 
     with pytest.raises(SystemExit, match="dirty"):
-        autocommit._rewrite_flow(parsed_rewrite_args())
+        lazycommit._rewrite_flow(parsed_rewrite_args())
 
     get_shas.assert_not_called()
 
@@ -1308,7 +1308,7 @@ def test_rewrite_flow_dry_run_skips_clean_worktree_check(
     monkeypatch.setattr(flows, "_ensure_clean_worktree", clean_check)
     monkeypatch.setattr(flows, "_get_rewrite_shas", lambda *_a, **_k: [])
 
-    assert autocommit._rewrite_flow(parsed_rewrite_args(dry_run=True)) == 0
+    assert lazycommit._rewrite_flow(parsed_rewrite_args(dry_run=True)) == 0
     clean_check.assert_not_called()
 
 
@@ -1318,10 +1318,10 @@ def test_rewrite_flow_nothing_to_rewrite(
     monkeypatch.setattr(flows, "_check_filter_repo", lambda: None)
     monkeypatch.setattr(flows, "_ensure_clean_worktree", lambda: None)
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
     monkeypatch.setattr(flows, "_get_rewrite_shas", lambda *_a, **_k: [])
 
-    code = autocommit._rewrite_flow(parsed_rewrite_args())
+    code = lazycommit._rewrite_flow(parsed_rewrite_args())
     out = capsys.readouterr().out
     assert code == 0
     assert "nothing to rewrite" in out
@@ -1334,7 +1334,7 @@ def test_rewrite_flow_api_failure_omits_cost(
 ) -> None:
     monkeypatch.setattr(flows, "_check_filter_repo", lambda: None)
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
     monkeypatch.setattr(flows, "_get_rewrite_shas", lambda *_a, **_k: ["a1"])
     monkeypatch.setattr(flows, "get_branch_name", lambda: "main")
     monkeypatch.setattr(flows, "_build_commit_context", lambda *_a, **_k: "ctx")
@@ -1347,7 +1347,7 @@ def test_rewrite_flow_api_failure_omits_cost(
     monkeypatch.setattr(flows, "generate_commit_json", fail_generate_commit_json)
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
 
-    code = autocommit._rewrite_flow(parsed_rewrite_args(dry_run=True))
+    code = lazycommit._rewrite_flow(parsed_rewrite_args(dry_run=True))
     out = capsys.readouterr().out
     assert code == 0
     assert "Cost:" not in out
@@ -1358,7 +1358,7 @@ def test_rewrite_flow_push(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(flows, "_check_filter_repo", lambda: None)
     monkeypatch.setattr(flows, "_ensure_clean_worktree", lambda: None)
     monkeypatch.setattr(flows, "get_repo_root", lambda: "/repo")
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
     monkeypatch.setattr(flows, "_get_rewrite_shas", lambda *_a, **_k: ["a1"])
     monkeypatch.setattr(flows, "get_branch_name", lambda: "main")
     monkeypatch.setattr(flows, "_build_commit_context", lambda *_a, **_k: "ctx")
@@ -1376,7 +1376,7 @@ def test_rewrite_flow_push(monkeypatch: pytest.MonkeyPatch) -> None:
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(flows.subprocess, "run", fake_run)
-    code = autocommit._rewrite_flow(parsed_rewrite_args(push=True))
+    code = lazycommit._rewrite_flow(parsed_rewrite_args(push=True))
     assert code == 0
     assert ["git", "push", "--force-with-lease"] in calls
 
@@ -1407,7 +1407,7 @@ def test_commit_flow_warns_on_push_failure(
         lambda cmd, **kwargs: SimpleNamespace(returncode=1, stderr=b"remote rejected"),
     )
 
-    code = autocommit._commit_flow(parsed_args(push=True))
+    code = lazycommit._commit_flow(parsed_args(push=True))
 
     assert code == 1
     assert warnings == ["git push failed"]
@@ -1433,7 +1433,7 @@ def test_commit_flow_logs_commit_message_preview(
     infos: list[str] = []
     monkeypatch.setattr(flows, "log_info", infos.append)
 
-    assert autocommit._commit_flow(parsed_args()) == 0
+    assert lazycommit._commit_flow(parsed_args()) == 0
     assert any("git_commit start message='feat: add x'" in msg for msg in infos)
 
 
@@ -1461,7 +1461,7 @@ def test_commit_flow_warns_on_push_timeout(
 
     monkeypatch.setattr(flows.subprocess, "run", fake_run)
 
-    code = autocommit._commit_flow(parsed_args(push=True))
+    code = lazycommit._commit_flow(parsed_args(push=True))
 
     assert code == 1
     assert warnings == ["git push timed out after 120s"]
@@ -1493,7 +1493,7 @@ def test_rewrite_flow_warns_on_push_failure(
         lambda cmd, **kwargs: SimpleNamespace(returncode=1, stderr=b"lease rejected"),
     )
 
-    code = autocommit._rewrite_flow(parsed_rewrite_args(push=True))
+    code = lazycommit._rewrite_flow(parsed_rewrite_args(push=True))
 
     assert code == 1
     assert warnings == ["git push --force-with-lease failed"]
@@ -1524,7 +1524,7 @@ def test_rewrite_flow_warns_on_push_timeout(
 
     monkeypatch.setattr(flows.subprocess, "run", fake_run)
 
-    code = autocommit._rewrite_flow(parsed_rewrite_args(push=True))
+    code = lazycommit._rewrite_flow(parsed_rewrite_args(push=True))
 
     assert code == 1
     assert warnings == ["git push --force-with-lease timed out after 120s"]
@@ -1553,7 +1553,7 @@ def test_commit_flow_passes_custom_model(
 
     monkeypatch.setattr(flows, "generate_commit_json", fake_generate_commit_json)
 
-    code = autocommit._commit_flow(parsed_args(dry_run=True, model=_CUSTOM_MODEL))
+    code = lazycommit._commit_flow(parsed_args(dry_run=True, model=_CUSTOM_MODEL))
 
     assert code == 0
     assert captured["model"] == _CUSTOM_MODEL
@@ -1580,7 +1580,7 @@ def test_rewrite_flow_passes_custom_model(
 
     monkeypatch.setattr(flows, "generate_commit_json", fake_generate_commit_json)
 
-    code = autocommit._rewrite_flow(
+    code = lazycommit._rewrite_flow(
         parsed_rewrite_args(dry_run=True, model=_CUSTOM_MODEL)
     )
 
@@ -1591,14 +1591,14 @@ def test_rewrite_flow_passes_custom_model(
 def test_parse_directory_commit(tmp_path: Path) -> None:
     """Test that -C flag is parsed correctly for commit subcommand."""
     sys.argv = ["lcm", "-C", str(tmp_path)]
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
     assert config.directory == str(tmp_path)
 
 
 def test_parse_directory_rewrite(tmp_path: Path) -> None:
     """Test that -C flag is parsed correctly for rewrite subcommand."""
     sys.argv = ["lcm", "rewrite", "-C", str(tmp_path)]
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
     assert config.directory == str(tmp_path)
 
 
@@ -1606,7 +1606,7 @@ def test_parse_model_commit_cli_override(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("LAZYCOMMIT_MODEL", "anthropic/claude-sonnet")
     sys.argv = ["lcm", "--model", _CUSTOM_MODEL]
 
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
 
     assert config.model == _CUSTOM_MODEL
 
@@ -1615,7 +1615,7 @@ def test_parse_model_rewrite_cli_override(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setenv("LAZYCOMMIT_MODEL", "anthropic/claude-sonnet")
     sys.argv = ["lcm", "rewrite", "--model", _CUSTOM_MODEL]
 
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
 
     assert config.model == _CUSTOM_MODEL
 
@@ -1623,7 +1623,7 @@ def test_parse_model_rewrite_cli_override(monkeypatch: pytest.MonkeyPatch) -> No
 def test_parse_reasoning_effort_commit_cli_override() -> None:
     sys.argv = ["lcm", "--reasoning-effort", "minimal"]
 
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
 
     assert config.reasoning_effort == "minimal"
 
@@ -1631,7 +1631,7 @@ def test_parse_reasoning_effort_commit_cli_override() -> None:
 def test_parse_reasoning_effort_rewrite_cli_override() -> None:
     sys.argv = ["lcm", "rewrite", "--reasoning-effort", "high"]
 
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
 
     assert config.reasoning_effort == "high"
 
@@ -1639,7 +1639,7 @@ def test_parse_reasoning_effort_rewrite_cli_override() -> None:
 def test_parse_silent_short_flag_commit() -> None:
     sys.argv = ["lcm", "-q"]
 
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
 
     assert config.silent is True
 
@@ -1647,7 +1647,7 @@ def test_parse_silent_short_flag_commit() -> None:
 def test_parse_reasoning_effort_short_flag_commit() -> None:
     sys.argv = ["lcm", "-r", "minimal"]
 
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
 
     assert config.reasoning_effort == "minimal"
 
@@ -1655,7 +1655,7 @@ def test_parse_reasoning_effort_short_flag_commit() -> None:
 def test_parse_bulk_threshold_short_flag_commit() -> None:
     sys.argv = ["lcm", "-B", "10"]
 
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
 
     assert config.bulk_threshold == 10
 
@@ -1663,7 +1663,7 @@ def test_parse_bulk_threshold_short_flag_commit() -> None:
 def test_parse_force_ai_short_flag_commit() -> None:
     sys.argv = ["lcm", "-F"]
 
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
 
     assert config.force_ai is True
 
@@ -1671,7 +1671,7 @@ def test_parse_force_ai_short_flag_commit() -> None:
 def test_parse_all_short_flag_rewrite() -> None:
     sys.argv = ["lcm", "rewrite", "-a"]
 
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
 
     assert config.all_commits is True
 
@@ -1679,7 +1679,7 @@ def test_parse_all_short_flag_rewrite() -> None:
 def test_parse_non_conventional_short_flag_rewrite() -> None:
     sys.argv = ["lcm", "rewrite", "-N"]
 
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
 
     assert config.non_conventional is True
 
@@ -1687,7 +1687,7 @@ def test_parse_non_conventional_short_flag_rewrite() -> None:
 def test_parse_unpushed_short_flag_rewrite() -> None:
     sys.argv = ["lcm", "rewrite", "-u"]
 
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
 
     assert config.unpushed is True
 
@@ -1695,7 +1695,7 @@ def test_parse_unpushed_short_flag_rewrite() -> None:
 def test_parse_commit_git_args_after_separator() -> None:
     sys.argv = ["lcm", "--", "--amend", "--no-verify"]
 
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
 
     assert config.subcommand == "commit"
     assert config.git_args == ("--amend", "--no-verify")
@@ -1705,7 +1705,7 @@ def test_parse_rewrite_rejects_git_args_after_separator() -> None:
     sys.argv = ["lcm", "rewrite", "--", "--amend"]
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     assert exc.value.code == 2
 
@@ -1714,14 +1714,14 @@ def test_parse_removed_silent_short_flag_rejected() -> None:
     sys.argv = ["lcm", "-S"]
 
     with pytest.raises(SystemExit):
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
 
 def test_parse_negative_max_diff_chars_rejected() -> None:
     sys.argv = ["lcm", "--max-diff-chars", "-1"]
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     assert exc.value.code == 2
 
@@ -1730,7 +1730,7 @@ def test_parse_negative_timeout_rejected() -> None:
     sys.argv = ["lcm", "--timeout", "-1"]
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     assert exc.value.code == 2
 
@@ -1739,7 +1739,7 @@ def test_parse_zero_timeout_rejected() -> None:
     sys.argv = ["lcm", "--timeout", "0"]
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     assert exc.value.code == 2
 
@@ -1748,7 +1748,7 @@ def test_parse_empty_type_rejected() -> None:
     sys.argv = ["lcm", "--type", ""]
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     assert exc.value.code == 2
 
@@ -1757,7 +1757,7 @@ def test_parse_invalid_type_rejected() -> None:
     sys.argv = ["lcm", "--type", "wip"]
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     assert exc.value.code == 2
 
@@ -1766,7 +1766,7 @@ def test_parse_invalid_scope_rejected() -> None:
     sys.argv = ["lcm", "--scope", "bad scope"]
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     assert exc.value.code == 2
 
@@ -1778,7 +1778,7 @@ def test_parse_invalid_env_default_rejected(
     monkeypatch.setenv("LAZYCOMMIT_MAX_DIFF_CHARS", "abc")
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     assert exc.value.code == 1
 
@@ -1790,7 +1790,7 @@ def test_parse_negative_env_defaults_rejected(
     monkeypatch.setenv("LAZYCOMMIT_MAX_DIFF_CHARS", "-1")
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     assert exc.value.code == 1
 
@@ -1802,7 +1802,7 @@ def test_parse_invalid_timeout_env_default_rejected(
     monkeypatch.setenv("LAZYCOMMIT_TIMEOUT", "0")
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     assert exc.value.code == 1
 
@@ -1814,20 +1814,20 @@ def test_parse_invalid_bulk_threshold_env_default_rejected(
     monkeypatch.setenv("LAZYCOMMIT_BULK_THRESHOLD", "-1")
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     assert exc.value.code == 1
 
 
 def test_version_exposed() -> None:
-    assert autocommit.__version__ == "1.0.0"
+    assert lazycommit.__version__ == "1.0.0"
 
 
 def test_commit_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
     sys.argv = ["lcm", "--version"]
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     assert exc.value.code == 0
     assert capsys.readouterr().out.strip() == "lcm 1.0.0"
@@ -1837,7 +1837,7 @@ def test_rewrite_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
     sys.argv = ["lcm", "rewrite", "--version"]
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     assert exc.value.code == 0
     assert capsys.readouterr().out.strip() == "lcm rewrite 1.0.0"
@@ -1849,7 +1849,7 @@ def test_commit_help_text_mentions_current_flags(
     sys.argv = ["lcm", "--help"]
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     out = capsys.readouterr().out
     assert exc.value.code == 0
@@ -1868,7 +1868,7 @@ def test_rewrite_help_text_mentions_current_flags(
     sys.argv = ["lcm", "rewrite", "--help"]
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     out = capsys.readouterr().out
     assert exc.value.code == 0
@@ -1887,7 +1887,7 @@ def test_commit_help_text_mentions_rewrite_subcommand(
     sys.argv = ["lcm", "--help"]
 
     with pytest.raises(SystemExit):
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
     out = capsys.readouterr().out
     assert "commands:" in out
@@ -1899,12 +1899,12 @@ def test_parse_args_enables_completion(monkeypatch: pytest.MonkeyPatch) -> None:
 
     captured: list[object] = []
     monkeypatch.setattr(
-        autocommit,
+        lazycommit,
         "_enable_completion",
         lambda parser: captured.append(parser),
     )
 
-    config = autocommit.parse_args()
+    config = lazycommit.parse_args()
 
     assert config.subcommand == "commit"
     assert len(captured) == 1
@@ -1913,7 +1913,7 @@ def test_parse_args_enables_completion(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_logger_falls_back_to_nullhandler(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    logger = logger_module.logging.getLogger("autocommit-test")
+    logger = logger_module.logging.getLogger("lazycommit-test")
     logger.handlers.clear()
     monkeypatch.setattr(
         logger_module.logging, "getLogger", lambda name="": logger
@@ -1939,7 +1939,7 @@ def test_parse_rewrite_rejects_bulk_threshold_flag() -> None:
     sys.argv = ["lcm", "rewrite", "--bulk-threshold", "10"]
 
     with pytest.raises(SystemExit):
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
 
 def test_parse_rewrite_rejects_force_ai_flag() -> None:
@@ -1947,45 +1947,45 @@ def test_parse_rewrite_rejects_force_ai_flag() -> None:
     sys.argv = ["lcm", "rewrite", "--force-ai"]
 
     with pytest.raises(SystemExit):
-        autocommit.parse_args()
+        lazycommit.parse_args()
 
 
 def test_main_chdir_called(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that main() calls os.chdir with the directory from config."""
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
     monkeypatch.setattr(
-        autocommit, "parse_args", lambda: parsed_args(directory=str(tmp_path))
+        lazycommit, "parse_args", lambda: parsed_args(directory=str(tmp_path))
     )
 
     chdir_calls: list[str] = []
     monkeypatch.setattr(os, "chdir", lambda path: chdir_calls.append(path))
 
     # Mock the flow to avoid further execution
-    monkeypatch.setattr(autocommit, "_commit_flow", lambda config: 0)
+    monkeypatch.setattr(lazycommit, "_commit_flow", lambda config: 0)
 
-    code = autocommit.main()
+    code = lazycommit.main()
     assert code == 0
     assert chdir_calls == [str(tmp_path)]
 
 
 def test_main_directory_not_exists(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that main() exits with error if directory does not exist."""
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
     monkeypatch.setattr(
-        autocommit, "parse_args", lambda: parsed_args(directory="/nonexistent/xyz")
+        lazycommit, "parse_args", lambda: parsed_args(directory="/nonexistent/xyz")
     )
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.main()
+        lazycommit.main()
     assert exc.value.code == 1
 
 
 def test_main_chdir_permission_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(autocommit, "load_xdg_config", lambda: None)
+    monkeypatch.setattr(lazycommit, "load_xdg_config", lambda: None)
     monkeypatch.setattr(
-        autocommit, "parse_args", lambda: parsed_args(directory=str(tmp_path))
+        lazycommit, "parse_args", lambda: parsed_args(directory=str(tmp_path))
     )
 
     def fail_chdir(_path: str) -> None:
@@ -1994,7 +1994,7 @@ def test_main_chdir_permission_error(
     monkeypatch.setattr(os, "chdir", fail_chdir)
 
     with pytest.raises(SystemExit) as exc:
-        autocommit.main()
+        lazycommit.main()
 
     assert exc.value.code == 1
 
@@ -2005,9 +2005,9 @@ def test_main_returns_130_on_keyboard_interrupt_during_load_xdg_config(
     def raise_keyboard_interrupt() -> None:
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(autocommit, "load_xdg_config", raise_keyboard_interrupt)
+    monkeypatch.setattr(lazycommit, "load_xdg_config", raise_keyboard_interrupt)
 
-    assert autocommit.main() == 130
+    assert lazycommit.main() == 130
 
 
 # ── Meta-timeout tests ─────────────────────────────────────────────────────
@@ -2132,7 +2132,7 @@ def test_commit_flow_meta_timeout_falls_back(
         ),
     )
 
-    code = autocommit._commit_flow(parsed_args(dry_run=True))
+    code = lazycommit._commit_flow(parsed_args(dry_run=True))
     captured = capsys.readouterr()
     assert code == 0
     assert "[fallback]" in captured.err
@@ -2170,7 +2170,7 @@ def test_bulk_detection_uses_fallback(
     monkeypatch.setattr(flows, "generate_commit_json", _assert_not_called)
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
 
-    code = autocommit._commit_flow(parsed_args(dry_run=True))
+    code = lazycommit._commit_flow(parsed_args(dry_run=True))
     captured = capsys.readouterr()
     assert code == 0
     assert not api_called
@@ -2195,7 +2195,7 @@ def test_bulk_detection_force_ai_overrides(
     monkeypatch.setattr(flows, "generate_commit_json", _fake_commit_response)
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
 
-    code = autocommit._commit_flow(parsed_args(dry_run=True, force_ai=True))
+    code = lazycommit._commit_flow(parsed_args(dry_run=True, force_ai=True))
     captured = capsys.readouterr()
     assert code == 0
     assert "feat: add x" in captured.out
@@ -2219,7 +2219,7 @@ def test_bulk_threshold_zero_disables(
     monkeypatch.setattr(flows, "generate_commit_json", _fake_commit_response)
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
 
-    code = autocommit._commit_flow(
+    code = lazycommit._commit_flow(
         parsed_args(dry_run=True, bulk_threshold=0)
     )
     captured = capsys.readouterr()
@@ -2245,7 +2245,7 @@ def test_bulk_detection_custom_threshold(
     monkeypatch.setattr(flows, "generate_commit_json", _fake_commit_response)
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
 
-    code = autocommit._commit_flow(
+    code = lazycommit._commit_flow(
         parsed_args(dry_run=True, bulk_threshold=10)
     )
     captured = capsys.readouterr()
@@ -2257,7 +2257,7 @@ def test_bulk_detection_custom_threshold(
 def test_build_fallback_bulk_subject() -> None:
     """When >= 10 files, fallback uses 'bulk update across N files'."""
     files = _many_files(20)
-    msg = autocommit.build_fallback_message(files)
+    msg = lazycommit.build_fallback_message(files)
     assert "bulk update across 20 files" in msg
 
 
