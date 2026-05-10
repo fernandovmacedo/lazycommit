@@ -62,12 +62,6 @@ If you do not want to install the CLI into your tool environment, you can run it
 uv run python -m lazycommit --dry-run
 ```
 
-Optional shell alias:
-
-```bash
-alias gg='lcm'
-```
-
 Shell completion is supported for Bash and Zsh through `argcomplete`. After
 installing the package, register completion in your shell:
 
@@ -246,7 +240,15 @@ Manual `git commit` is still the right choice when you already know the exact me
 
 Asking a general coding agent to commit for you is useful when commit generation is part of a larger agent workflow, but it is usually slower, broader, and more expensive than a dedicated CLI.
 
-Other AI commit message tools may generate a subject line, but `lazycommit` is opinionated about a narrower workflow:
+There is also [`KartikLabhshetwar/lazycommit`](https://github.com/KartikLabhshetwar/lazycommit), an npm package with a similar goal: generate commit messages from staged changes with AI.
+
+The main differences are:
+
+- This project is a Python CLI installed with `uv` or `pip`; that project is a Node.js CLI installed with `npm`.
+- This project uses OpenRouter structured outputs and treats Conventional Commit formatting as the default contract; the npm package uses Groq and offers Conventional Commits as an optional mode.
+- This project has a deterministic fallback path, so commit generation still completes when AI is unavailable, times out, or is skipped for bulk changes; the npm package focuses more on interactive generation, review/edit/confirm, and generating multiple suggestions.
+
+Other AI commit message tools may generate a subject line, but this `lazycommit` is opinionated about a narrower workflow:
 
 - Conventional Commit output is the default contract.
 - Deterministic fallback keeps the command usable when AI generation fails or is skipped.
