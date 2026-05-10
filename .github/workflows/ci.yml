@@ -32,10 +32,10 @@ jobs:
         run: uv sync --group dev
 
       - name: Lint
-        run: uv run ruff check committer/ tests/
+        run: uv run ruff check autocommit/ tests/
 
       - name: Type-check
-        run: uv run mypy committer/
+        run: uv run mypy autocommit/
 
       - name: Test
         run: uv run pytest tests/ -v
