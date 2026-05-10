@@ -7,9 +7,9 @@ import subprocess
 import tomllib
 from collections.abc import Sequence
 
-from autocommit.console import warn
-from autocommit.constants import DIFF_EXCLUDE_PATTERNS, GIT_TIMEOUT_S
-from autocommit.logger import log_debug, log_warning
+from lazycommit.console import warn
+from lazycommit.constants import DIFF_EXCLUDE_PATTERNS, GIT_TIMEOUT_S
+from lazycommit.logger import log_debug, log_warning
 
 
 def run_git(*args: str) -> str | None:
@@ -122,17 +122,17 @@ def get_recent_commits() -> str:
 def load_xdg_config() -> None:
     """Load config from XDG config directory if available.
 
-    Reads from $XDG_CONFIG_HOME/autocommit/config.toml (defaults to
-    ~/.config/autocommit/config.toml). Sets environment variables for
-    AUTOCOMMIT_MODEL, AUTOCOMMIT_REASONING_EFFORT,
-    AUTOCOMMIT_MAX_DIFF_CHARS, AUTOCOMMIT_TIMEOUT, and
-    AUTOCOMMIT_BULK_THRESHOLD. Does not override existing environment
+    Reads from $XDG_CONFIG_HOME/lazycommit/config.toml (defaults to
+    ~/.config/lazycommit/config.toml). Sets environment variables for
+    LAZYCOMMIT_MODEL, LAZYCOMMIT_REASONING_EFFORT,
+    LAZYCOMMIT_MAX_DIFF_CHARS, LAZYCOMMIT_TIMEOUT, and
+    LAZYCOMMIT_BULK_THRESHOLD. Does not override existing environment
     variables.
     """
     xdg_config_home = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser(
         "~/.config"
     )
-    config_path = os.path.join(xdg_config_home, "autocommit", "config.toml")
+    config_path = os.path.join(xdg_config_home, "lazycommit", "config.toml")
 
     if not os.path.isfile(config_path):
         return
@@ -148,11 +148,11 @@ def load_xdg_config() -> None:
         return
 
     mapping = {
-        "model": "AUTOCOMMIT_MODEL",
-        "reasoning_effort": "AUTOCOMMIT_REASONING_EFFORT",
-        "max_diff_chars": "AUTOCOMMIT_MAX_DIFF_CHARS",
-        "timeout": "AUTOCOMMIT_TIMEOUT",
-        "bulk_threshold": "AUTOCOMMIT_BULK_THRESHOLD",
+        "model": "LAZYCOMMIT_MODEL",
+        "reasoning_effort": "LAZYCOMMIT_REASONING_EFFORT",
+        "max_diff_chars": "LAZYCOMMIT_MAX_DIFF_CHARS",
+        "timeout": "LAZYCOMMIT_TIMEOUT",
+        "bulk_threshold": "LAZYCOMMIT_BULK_THRESHOLD",
     }
     for toml_key, env_key in mapping.items():
         if toml_key in data and env_key not in os.environ:
@@ -160,9 +160,9 @@ def load_xdg_config() -> None:
 
 
 def load_context_file(path: str | None, repo_root: str) -> str:
-    """Load context from an explicit file or fall back to ``.autocommit.md``."""
+    """Load context from an explicit file or fall back to ``.lazycommit.md``."""
     candidates = [path] if path else []
-    candidates.append(os.path.join(repo_root, ".autocommit.md"))
+    candidates.append(os.path.join(repo_root, ".lazycommit.md"))
 
     for candidate in candidates:
         try:

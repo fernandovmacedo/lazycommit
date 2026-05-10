@@ -4,7 +4,7 @@ This file provides guidance to AI Agents when working with code in this reposito
 
 ## Project Purpose
 
-**Autocommit** is a Python CLI that stages changes, generates Conventional Commit messages through OpenRouter-backed structured outputs, and commits in one command. It also includes a `rewrite` subcommand for batch-rewriting history into Conventional Commit format. When AI generation is unavailable, invalid, timed out, or intentionally skipped for bulk changes, it falls back to a deterministic message generator so the command still completes.
+**Lazycommit** is a Python CLI that stages changes, generates Conventional Commit messages through OpenRouter-backed structured outputs, and commits in one command. It also includes a `rewrite` subcommand for batch-rewriting history into Conventional Commit format. When AI generation is unavailable, invalid, timed out, or intentionally skipped for bulk changes, it falls back to a deterministic message generator so the command still completes.
 
 ## Commands
 
@@ -18,26 +18,26 @@ uv run --group dev pytest tests/ -v
 uv run --group dev pytest tests/ -v -k "test_name"
 
 # Lint
-uv run --group dev ruff check autocommit/ tests/
+uv run --group dev ruff check lazycommit/ tests/
 
 # Type-check (strict mypy)
-uv run --group dev mypy autocommit/
+uv run --group dev mypy lazycommit/
 
 # Install as CLI tool (editable)
 uv tool install --editable .
 
 # Smoke test (dry run, no API needed)
-uv run python -m autocommit --dry-run
+uv run python -m lazycommit --dry-run
 ```
 
 ## Architecture
 
-The application is structured as the `autocommit/` package with the following modules:
+The application is structured as the `lazycommit/` package with the following modules:
 
 ```
-autocommit/
-├── __init__.py      # main(), parse_args(), backward-compat re-exports
-├── __main__.py      # python -m autocommit support
+lazycommit/
+├── __init__.py      # main(), parse_args(), public re-exports
+├── __main__.py      # python -m lazycommit support
 ├── constants.py     # SYSTEM_PROMPT, ALLOWED_TYPES, DIFF_EXCLUDE_PATTERNS, conventional regex
 ├── config.py        # Config dataclass (unified commit + rewrite configuration)
 ├── console.py       # Rich console singletons, out/err/warn/die, verbose printers  [INFRASTRUCTURE]
@@ -64,10 +64,10 @@ __main__   → __init__
 ### Infrastructure vs domain layer
 
 `api.py`, `console.py`, and `logger.py` are **infrastructure**: they have zero imports from any other
-`autocommit.*` module and can be copied to a new project as-is. Everything else is
+`lazycommit.*` module and can be copied to a new project as-is. Everything else is
 **domain** (Conventional Commits + git specific).
 
-**Invariant:** `api.py`, `console.py`, and `logger.py` must never gain a `from autocommit.*` import.
+**Invariant:** `api.py`, `console.py`, and `logger.py` must never gain a `from lazycommit.*` import.
 If one appears, the boundary has been broken.
 
 **Wiring rule:** `flows.py` is the only module that connects the two layers. Domain
@@ -88,11 +88,11 @@ never imported inside `api.py` or `console.py`.
 
 ```
 main()
-  ├─ load_xdg_config()           # load ~/.config/autocommit/config.toml FIRST
+  ├─ load_xdg_config()           # load ~/.config/lazycommit/config.toml FIRST
   ├─ parse_args()                # dispatches to commit or rewrite flow
   ├─ auto_stage()                # git add -A unless already staged or --amend
   ├─ Collect git context         # diff, files, stats, branch, recent commits
-  ├─ load_context_file()         # optional .autocommit.md for project hints
+  ├─ load_context_file()         # optional .lazycommit.md for project hints
   ├─ generate_commit_json()      # OpenRouter structured output call
   │    └─ on failure → build_fallback_message()
   ├─ assemble_message()          # converts structured response to final commit string
@@ -104,7 +104,7 @@ main()
 
 ```
 main()
-  ├─ load_xdg_config()           # load ~/.config/autocommit/config.toml FIRST
+  ├─ load_xdg_config()           # load ~/.config/lazycommit/config.toml FIRST
   └─ _rewrite_flow()
        ├─ _check_filter_repo()        # verify git-filter-repo is installed
        ├─ _ensure_clean_worktree()    # require clean worktree for non-dry-run rewrites
@@ -125,19 +125,19 @@ main()
 - **Lockfiles excluded from diff.** `*.lock` and `*lock.json` are filtered before sending to the API to save tokens.
 - **`--amend` awareness.** Auto-staging is skipped when `--amend` appears in passthrough args to preserve user intent.
 - **Structured outputs.** `instructor` wraps LiteLLM with `OPENROUTER_STRUCTURED_OUTPUTS`, so responses are parsed directly into the `CommitMessage` model.
-- **Diff truncated at line boundaries.** A 12k character limit (`AUTOCOMMIT_MAX_DIFF_CHARS`) is applied at the nearest newline to avoid partial diffs.
-- **Bulk-change guardrail.** When staged files exceed `AUTOCOMMIT_BULK_THRESHOLD` (default `50`), the commit flow skips AI and uses the deterministic fallback unless `--force-ai` is set.
+- **Diff truncated at line boundaries.** A 12k character limit (`LAZYCOMMIT_MAX_DIFF_CHARS`) is applied at the nearest newline to avoid partial diffs.
+- **Bulk-change guardrail.** When staged files exceed `LAZYCOMMIT_BULK_THRESHOLD` (default `50`), the commit flow skips AI and uses the deterministic fallback unless `--force-ai` is set.
 - **Usage tracking.** Every API call captures prompt/completion tokens, cached tokens, reasoning tokens, and cost; printed in execution summary.
 - **Silent mode.** `-q, --silent` suppresses stdout while still showing warnings/errors on stderr.
 - **Verbose mode.** `-v, --verbose` prints model details, prompt context, diff content, and raw structured responses for debugging.
 
 ### Logging and debugging
 
-Autocommit has a two-tier observability system: a persistent file logger for post-mortem analysis and console output modes for real-time feedback.
+Lazycommit has a two-tier observability system: a persistent file logger for post-mortem analysis and console output modes for real-time feedback.
 
-#### Persistent file logger (`autocommit/logger.py`)
+#### Persistent file logger (`lazycommit/logger.py`)
 
-Every run writes to `~/.local/state/autocommit/autocommit.log` (respects `$XDG_STATE_HOME`). The file rotates at 2 MB with 3 backups. It never raises — setup failures silently fall back to a `NullHandler` so commits are never blocked.
+Every run writes to `~/.local/state/lazycommit/lazycommit.log` (respects `$XDG_STATE_HOME`). The file rotates at 2 MB with 3 backups. It never raises — setup failures silently fall back to a `NullHandler` so commits are never blocked.
 
 **Log format:**
 ```
@@ -174,16 +174,16 @@ Verbose output is gated by `not config.silent and config.verbose`. The `_print_v
 
 ```bash
 # See what went wrong in the last run
-tail -50 ~/.local/state/autocommit/autocommit.log
+tail -50 ~/.local/state/lazycommit/lazycommit.log
 
 # Watch the log in real time while running
-tail -f ~/.local/state/autocommit/autocommit.log &  uv run python -m autocommit
+tail -f ~/.local/state/lazycommit/lazycommit.log &  uv run python -m lazycommit
 
 # Debug an API issue: see the full request/response
-uv run python -m autocommit -v
+uv run python -m lazycommit -v
 
 # Debug with maximum detail: verbose + watch the log
-uv run python -m autocommit -v 2>&1 | tee /dev/stderr
+uv run python -m lazycommit -v 2>&1 | tee /dev/stderr
 ```
 
 ### Fallback message generation (`build_fallback_message`)
@@ -203,7 +203,7 @@ Non-dry-run rewrites require a clean worktree before SHA collection or API calls
 
 ## Configuration
 
-XDG config file at `~/.config/autocommit/config.toml` (or `$XDG_CONFIG_HOME/autocommit/config.toml`):
+XDG config file at `~/.config/lazycommit/config.toml` (or `$XDG_CONFIG_HOME/lazycommit/config.toml`):
 
 ```toml
 # OpenRouter model slug used for commit and rewrite requests.
@@ -229,18 +229,18 @@ TOML keys map to environment variables:
 
 | TOML key | Environment variable |
 |---|---|
-| `model` | `AUTOCOMMIT_MODEL` |
-| `reasoning_effort` | `AUTOCOMMIT_REASONING_EFFORT` |
-| `max_diff_chars` | `AUTOCOMMIT_MAX_DIFF_CHARS` |
-| `timeout` | `AUTOCOMMIT_TIMEOUT` |
-| `bulk_threshold` | `AUTOCOMMIT_BULK_THRESHOLD` |
+| `model` | `LAZYCOMMIT_MODEL` |
+| `reasoning_effort` | `LAZYCOMMIT_REASONING_EFFORT` |
+| `max_diff_chars` | `LAZYCOMMIT_MAX_DIFF_CHARS` |
+| `timeout` | `LAZYCOMMIT_TIMEOUT` |
+| `bulk_threshold` | `LAZYCOMMIT_BULK_THRESHOLD` |
 
 Precedence: CLI flag > environment variable > XDG config > hardcoded default.
 
 Runtime dependencies: `litellm`, `instructor`, `pydantic`, `rich`.
 
-Optional `.autocommit.md` in the repo root injects project-specific context into the prompt. Path can also be set via `--context`.
+Optional `.lazycommit.md` in the repo root injects project-specific context into the prompt. Path can also be set via `--context`.
 
 ## Testing
 
-Tests live in `tests/test_autocommit.py`. All subprocess and AI client calls are mocked, so the suite does not require network access or a real git repository. Coverage includes message assembly, fallback logic, diff truncation, context loading, staging behavior, API integration, usage stats, bulk-change detection, rewrite flow, parser behavior, timeout handling, and end-to-end `main()` flows.
+Tests live in `tests/test_lazycommit.py`. All subprocess and AI client calls are mocked, so the suite does not require network access or a real git repository. Coverage includes message assembly, fallback logic, diff truncation, context loading, staging behavior, API integration, usage stats, bulk-change detection, rewrite flow, parser behavior, timeout handling, and end-to-end `main()` flows.

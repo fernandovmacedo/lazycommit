@@ -1,5 +1,5 @@
 [project]
-name = "autocommit"
+name = "lazycommit"
 version = "1.0.0"
 description = "AI-assisted git commit and history rewrite CLI for Conventional Commits"
 readme = "README.md"
@@ -28,11 +28,11 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/fernandovmacedo/autocommit"
-Repository = "https://github.com/fernandovmacedo/autocommit"
+Homepage = "https://github.com/fernandovmacedo/lazycommit"
+Repository = "https://github.com/fernandovmacedo/lazycommit"
 
 [project.scripts]
-autocommit = "autocommit:main"
+lcm = "lazycommit:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -9,14 +9,14 @@ from unittest.mock import Mock
 
 import pytest
 
-import autocommit
-from autocommit import Config, flows
-from autocommit import api as api_module
-from autocommit import git as git_module
-from autocommit import logger as logger_module
-from autocommit import rewrite as rewrite_module
-from autocommit.config import DEFAULT_MODEL, DEFAULT_REASONING_EFFORT
-from autocommit.message import CommitMessage
+import lazycommit as autocommit
+from lazycommit import Config, flows
+from lazycommit import api as api_module
+from lazycommit import git as git_module
+from lazycommit import logger as logger_module
+from lazycommit import rewrite as rewrite_module
+from lazycommit.config import DEFAULT_MODEL, DEFAULT_REASONING_EFFORT
+from lazycommit.message import CommitMessage
 
 _FAKE_COMMIT = CommitMessage(type="feat", scope="", subject="add x", body="")
 _CUSTOM_MODEL = "google/gemini-3.1-flash-lite"
@@ -237,7 +237,7 @@ def test_load_context_file_explicit(tmp_path: Path) -> None:
 
 
 def test_load_context_file_auto_discovery(tmp_path: Path) -> None:
-    f = tmp_path / ".autocommit.md"
+    f = tmp_path / ".lazycommit.md"
     f.write_text("auto", encoding="utf-8")
     assert autocommit.load_context_file(None, str(tmp_path)) == "auto"
 
@@ -282,7 +282,7 @@ def test_load_context_file_oserror_warns(
 
 def test_load_context_file_explicit_takes_priority(tmp_path: Path) -> None:
     explicit = tmp_path / "my.md"
-    auto = tmp_path / ".autocommit.md"
+    auto = tmp_path / ".lazycommit.md"
     explicit.write_text("explicit", encoding="utf-8")
     auto.write_text("auto", encoding="utf-8")
     assert autocommit.load_context_file(str(explicit), str(tmp_path)) == "explicit"
@@ -764,7 +764,7 @@ def test_main_push_skipped_on_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_load_xdg_config_ignores_api_key(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_dir = tmp_path / "autocommit"
+    config_dir = tmp_path / "lazycommit"
     config_dir.mkdir()
     config_file = config_dir / "config.toml"
     config_file.write_text('api_key = "abc"\n', encoding="utf-8")
@@ -779,7 +779,7 @@ def test_load_xdg_config_ignores_api_key(
 def test_load_xdg_config_leaves_existing_api_key_unchanged(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_dir = tmp_path / "autocommit"
+    config_dir = tmp_path / "lazycommit"
     config_dir.mkdir()
     config_file = config_dir / "config.toml"
     config_file.write_text('api_key = "fromfile"\n', encoding="utf-8")
@@ -794,32 +794,32 @@ def test_load_xdg_config_leaves_existing_api_key_unchanged(
 def test_load_xdg_config_defaults_to_home_config(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_dir = tmp_path / ".config" / "autocommit"
+    config_dir = tmp_path / ".config" / "lazycommit"
     config_dir.mkdir(parents=True)
     config_file = config_dir / "config.toml"
     config_file.write_text('model = "test-model"\n', encoding="utf-8")
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.delenv("AUTOCOMMIT_MODEL", raising=False)
+    monkeypatch.delenv("LAZYCOMMIT_MODEL", raising=False)
 
     autocommit.load_xdg_config()
 
-    assert os.environ.get("AUTOCOMMIT_MODEL") == "test-model"
+    assert os.environ.get("LAZYCOMMIT_MODEL") == "test-model"
 
 
 def test_load_xdg_config_reasoning_effort(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_dir = tmp_path / "autocommit"
+    config_dir = tmp_path / "lazycommit"
     config_dir.mkdir()
     config_file = config_dir / "config.toml"
     config_file.write_text('reasoning_effort = "none"\n', encoding="utf-8")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    monkeypatch.delenv("AUTOCOMMIT_REASONING_EFFORT", raising=False)
+    monkeypatch.delenv("LAZYCOMMIT_REASONING_EFFORT", raising=False)
 
     autocommit.load_xdg_config()
 
-    assert os.environ.get("AUTOCOMMIT_REASONING_EFFORT") == "none"
+    assert os.environ.get("LAZYCOMMIT_REASONING_EFFORT") == "none"
 
 
 def test_load_xdg_config_handles_missing_file(
@@ -837,7 +837,7 @@ def test_load_xdg_config_handles_missing_file(
 def test_load_xdg_config_handles_invalid_toml(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_dir = tmp_path / "autocommit"
+    config_dir = tmp_path / "lazycommit"
     config_dir.mkdir()
     config_file = config_dir / "config.toml"
     config_file.write_text("invalid toml [[[\n", encoding="utf-8")
@@ -856,7 +856,7 @@ def test_load_xdg_config_handles_invalid_toml(
 def test_load_xdg_config_oserror(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_dir = tmp_path / "autocommit"
+    config_dir = tmp_path / "lazycommit"
     config_dir.mkdir()
     config_file = config_dir / "config.toml"
     config_file.write_text('model = "test-model"\n', encoding="utf-8")
@@ -882,19 +882,19 @@ def test_load_xdg_config_oserror(
 def test_config_invalid_env_var(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("AUTOCOMMIT_MAX_DIFF_CHARS", "abc")
+    monkeypatch.setenv("LAZYCOMMIT_MAX_DIFF_CHARS", "abc")
 
     with pytest.raises(SystemExit) as exc:
         Config(subcommand="commit")
 
     assert exc.value.code == 1
-    assert "invalid value for AUTOCOMMIT_MAX_DIFF_CHARS" in capsys.readouterr().err
+    assert "invalid value for LAZYCOMMIT_MAX_DIFF_CHARS" in capsys.readouterr().err
 
 
 def test_config_empty_model_rejected(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("AUTOCOMMIT_MODEL", "")
+    monkeypatch.setenv("LAZYCOMMIT_MODEL", "")
 
     with pytest.raises(SystemExit) as exc:
         Config(subcommand="commit")
@@ -906,7 +906,7 @@ def test_config_empty_model_rejected(
 def test_config_invalid_reasoning_effort_rejected(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("AUTOCOMMIT_REASONING_EFFORT", "turbo")
+    monkeypatch.setenv("LAZYCOMMIT_REASONING_EFFORT", "turbo")
 
     with pytest.raises(SystemExit) as exc:
         Config(subcommand="commit")
@@ -934,20 +934,20 @@ def test_config_invalid_type_and_scope_rejected() -> None:
 def test_load_xdg_config_converts_numbers_to_strings(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    config_dir = tmp_path / "autocommit"
+    config_dir = tmp_path / "lazycommit"
     config_dir.mkdir()
     config_file = config_dir / "config.toml"
     config_file.write_text(
         "max_diff_chars = 5000\ntimeout = 15.5\n", encoding="utf-8"
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    monkeypatch.delenv("AUTOCOMMIT_MAX_DIFF_CHARS", raising=False)
-    monkeypatch.delenv("AUTOCOMMIT_TIMEOUT", raising=False)
+    monkeypatch.delenv("LAZYCOMMIT_MAX_DIFF_CHARS", raising=False)
+    monkeypatch.delenv("LAZYCOMMIT_TIMEOUT", raising=False)
 
     autocommit.load_xdg_config()
 
-    assert os.environ.get("AUTOCOMMIT_MAX_DIFF_CHARS") == "5000"
-    assert os.environ.get("AUTOCOMMIT_TIMEOUT") == "15.5"
+    assert os.environ.get("LAZYCOMMIT_MAX_DIFF_CHARS") == "5000"
+    assert os.environ.get("LAZYCOMMIT_TIMEOUT") == "15.5"
 
 
 def test_main_nothing_to_commit(
@@ -1590,21 +1590,21 @@ def test_rewrite_flow_passes_custom_model(
 
 def test_parse_directory_commit(tmp_path: Path) -> None:
     """Test that -C flag is parsed correctly for commit subcommand."""
-    sys.argv = ["autocommit", "-C", str(tmp_path)]
+    sys.argv = ["lcm", "-C", str(tmp_path)]
     config = autocommit.parse_args()
     assert config.directory == str(tmp_path)
 
 
 def test_parse_directory_rewrite(tmp_path: Path) -> None:
     """Test that -C flag is parsed correctly for rewrite subcommand."""
-    sys.argv = ["autocommit", "rewrite", "-C", str(tmp_path)]
+    sys.argv = ["lcm", "rewrite", "-C", str(tmp_path)]
     config = autocommit.parse_args()
     assert config.directory == str(tmp_path)
 
 
 def test_parse_model_commit_cli_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AUTOCOMMIT_MODEL", "anthropic/claude-sonnet")
-    sys.argv = ["autocommit", "--model", _CUSTOM_MODEL]
+    monkeypatch.setenv("LAZYCOMMIT_MODEL", "anthropic/claude-sonnet")
+    sys.argv = ["lcm", "--model", _CUSTOM_MODEL]
 
     config = autocommit.parse_args()
 
@@ -1612,8 +1612,8 @@ def test_parse_model_commit_cli_override(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_parse_model_rewrite_cli_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AUTOCOMMIT_MODEL", "anthropic/claude-sonnet")
-    sys.argv = ["autocommit", "rewrite", "--model", _CUSTOM_MODEL]
+    monkeypatch.setenv("LAZYCOMMIT_MODEL", "anthropic/claude-sonnet")
+    sys.argv = ["lcm", "rewrite", "--model", _CUSTOM_MODEL]
 
     config = autocommit.parse_args()
 
@@ -1621,7 +1621,7 @@ def test_parse_model_rewrite_cli_override(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_parse_reasoning_effort_commit_cli_override() -> None:
-    sys.argv = ["autocommit", "--reasoning-effort", "minimal"]
+    sys.argv = ["lcm", "--reasoning-effort", "minimal"]
 
     config = autocommit.parse_args()
 
@@ -1629,7 +1629,7 @@ def test_parse_reasoning_effort_commit_cli_override() -> None:
 
 
 def test_parse_reasoning_effort_rewrite_cli_override() -> None:
-    sys.argv = ["autocommit", "rewrite", "--reasoning-effort", "high"]
+    sys.argv = ["lcm", "rewrite", "--reasoning-effort", "high"]
 
     config = autocommit.parse_args()
 
@@ -1637,7 +1637,7 @@ def test_parse_reasoning_effort_rewrite_cli_override() -> None:
 
 
 def test_parse_silent_short_flag_commit() -> None:
-    sys.argv = ["autocommit", "-q"]
+    sys.argv = ["lcm", "-q"]
 
     config = autocommit.parse_args()
 
@@ -1645,7 +1645,7 @@ def test_parse_silent_short_flag_commit() -> None:
 
 
 def test_parse_reasoning_effort_short_flag_commit() -> None:
-    sys.argv = ["autocommit", "-r", "minimal"]
+    sys.argv = ["lcm", "-r", "minimal"]
 
     config = autocommit.parse_args()
 
@@ -1653,7 +1653,7 @@ def test_parse_reasoning_effort_short_flag_commit() -> None:
 
 
 def test_parse_bulk_threshold_short_flag_commit() -> None:
-    sys.argv = ["autocommit", "-B", "10"]
+    sys.argv = ["lcm", "-B", "10"]
 
     config = autocommit.parse_args()
 
@@ -1661,7 +1661,7 @@ def test_parse_bulk_threshold_short_flag_commit() -> None:
 
 
 def test_parse_force_ai_short_flag_commit() -> None:
-    sys.argv = ["autocommit", "-F"]
+    sys.argv = ["lcm", "-F"]
 
     config = autocommit.parse_args()
 
@@ -1669,7 +1669,7 @@ def test_parse_force_ai_short_flag_commit() -> None:
 
 
 def test_parse_all_short_flag_rewrite() -> None:
-    sys.argv = ["autocommit", "rewrite", "-a"]
+    sys.argv = ["lcm", "rewrite", "-a"]
 
     config = autocommit.parse_args()
 
@@ -1677,7 +1677,7 @@ def test_parse_all_short_flag_rewrite() -> None:
 
 
 def test_parse_non_conventional_short_flag_rewrite() -> None:
-    sys.argv = ["autocommit", "rewrite", "-N"]
+    sys.argv = ["lcm", "rewrite", "-N"]
 
     config = autocommit.parse_args()
 
@@ -1685,7 +1685,7 @@ def test_parse_non_conventional_short_flag_rewrite() -> None:
 
 
 def test_parse_unpushed_short_flag_rewrite() -> None:
-    sys.argv = ["autocommit", "rewrite", "-u"]
+    sys.argv = ["lcm", "rewrite", "-u"]
 
     config = autocommit.parse_args()
 
@@ -1693,7 +1693,7 @@ def test_parse_unpushed_short_flag_rewrite() -> None:
 
 
 def test_parse_commit_git_args_after_separator() -> None:
-    sys.argv = ["autocommit", "--", "--amend", "--no-verify"]
+    sys.argv = ["lcm", "--", "--amend", "--no-verify"]
 
     config = autocommit.parse_args()
 
@@ -1702,7 +1702,7 @@ def test_parse_commit_git_args_after_separator() -> None:
 
 
 def test_parse_rewrite_rejects_git_args_after_separator() -> None:
-    sys.argv = ["autocommit", "rewrite", "--", "--amend"]
+    sys.argv = ["lcm", "rewrite", "--", "--amend"]
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
@@ -1711,14 +1711,14 @@ def test_parse_rewrite_rejects_git_args_after_separator() -> None:
 
 
 def test_parse_removed_silent_short_flag_rejected() -> None:
-    sys.argv = ["autocommit", "-S"]
+    sys.argv = ["lcm", "-S"]
 
     with pytest.raises(SystemExit):
         autocommit.parse_args()
 
 
 def test_parse_negative_max_diff_chars_rejected() -> None:
-    sys.argv = ["autocommit", "--max-diff-chars", "-1"]
+    sys.argv = ["lcm", "--max-diff-chars", "-1"]
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
@@ -1727,7 +1727,7 @@ def test_parse_negative_max_diff_chars_rejected() -> None:
 
 
 def test_parse_negative_timeout_rejected() -> None:
-    sys.argv = ["autocommit", "--timeout", "-1"]
+    sys.argv = ["lcm", "--timeout", "-1"]
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
@@ -1736,7 +1736,7 @@ def test_parse_negative_timeout_rejected() -> None:
 
 
 def test_parse_zero_timeout_rejected() -> None:
-    sys.argv = ["autocommit", "--timeout", "0"]
+    sys.argv = ["lcm", "--timeout", "0"]
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
@@ -1745,7 +1745,7 @@ def test_parse_zero_timeout_rejected() -> None:
 
 
 def test_parse_empty_type_rejected() -> None:
-    sys.argv = ["autocommit", "--type", ""]
+    sys.argv = ["lcm", "--type", ""]
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
@@ -1754,7 +1754,7 @@ def test_parse_empty_type_rejected() -> None:
 
 
 def test_parse_invalid_type_rejected() -> None:
-    sys.argv = ["autocommit", "--type", "wip"]
+    sys.argv = ["lcm", "--type", "wip"]
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
@@ -1763,7 +1763,7 @@ def test_parse_invalid_type_rejected() -> None:
 
 
 def test_parse_invalid_scope_rejected() -> None:
-    sys.argv = ["autocommit", "--scope", "bad scope"]
+    sys.argv = ["lcm", "--scope", "bad scope"]
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
@@ -1774,8 +1774,8 @@ def test_parse_invalid_scope_rejected() -> None:
 def test_parse_invalid_env_default_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    sys.argv = ["autocommit"]
-    monkeypatch.setenv("AUTOCOMMIT_MAX_DIFF_CHARS", "abc")
+    sys.argv = ["lcm"]
+    monkeypatch.setenv("LAZYCOMMIT_MAX_DIFF_CHARS", "abc")
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
@@ -1786,8 +1786,8 @@ def test_parse_invalid_env_default_rejected(
 def test_parse_negative_env_defaults_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    sys.argv = ["autocommit"]
-    monkeypatch.setenv("AUTOCOMMIT_MAX_DIFF_CHARS", "-1")
+    sys.argv = ["lcm"]
+    monkeypatch.setenv("LAZYCOMMIT_MAX_DIFF_CHARS", "-1")
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
@@ -1798,8 +1798,8 @@ def test_parse_negative_env_defaults_rejected(
 def test_parse_invalid_timeout_env_default_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    sys.argv = ["autocommit"]
-    monkeypatch.setenv("AUTOCOMMIT_TIMEOUT", "0")
+    sys.argv = ["lcm"]
+    monkeypatch.setenv("LAZYCOMMIT_TIMEOUT", "0")
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
@@ -1810,8 +1810,8 @@ def test_parse_invalid_timeout_env_default_rejected(
 def test_parse_invalid_bulk_threshold_env_default_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    sys.argv = ["autocommit"]
-    monkeypatch.setenv("AUTOCOMMIT_BULK_THRESHOLD", "-1")
+    sys.argv = ["lcm"]
+    monkeypatch.setenv("LAZYCOMMIT_BULK_THRESHOLD", "-1")
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
@@ -1824,29 +1824,29 @@ def test_version_exposed() -> None:
 
 
 def test_commit_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
-    sys.argv = ["autocommit", "--version"]
+    sys.argv = ["lcm", "--version"]
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
 
     assert exc.value.code == 0
-    assert capsys.readouterr().out.strip() == "autocommit 1.0.0"
+    assert capsys.readouterr().out.strip() == "lcm 1.0.0"
 
 
 def test_rewrite_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
-    sys.argv = ["autocommit", "rewrite", "--version"]
+    sys.argv = ["lcm", "rewrite", "--version"]
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
 
     assert exc.value.code == 0
-    assert capsys.readouterr().out.strip() == "autocommit rewrite 1.0.0"
+    assert capsys.readouterr().out.strip() == "lcm rewrite 1.0.0"
 
 
 def test_commit_help_text_mentions_current_flags(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    sys.argv = ["autocommit", "--help"]
+    sys.argv = ["lcm", "--help"]
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
@@ -1865,7 +1865,7 @@ def test_commit_help_text_mentions_current_flags(
 def test_rewrite_help_text_mentions_current_flags(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    sys.argv = ["autocommit", "rewrite", "--help"]
+    sys.argv = ["lcm", "rewrite", "--help"]
 
     with pytest.raises(SystemExit) as exc:
         autocommit.parse_args()
@@ -1884,7 +1884,7 @@ def test_rewrite_help_text_mentions_current_flags(
 def test_commit_help_text_mentions_rewrite_subcommand(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    sys.argv = ["autocommit", "--help"]
+    sys.argv = ["lcm", "--help"]
 
     with pytest.raises(SystemExit):
         autocommit.parse_args()
@@ -1895,7 +1895,7 @@ def test_commit_help_text_mentions_rewrite_subcommand(
 
 
 def test_parse_args_enables_completion(monkeypatch: pytest.MonkeyPatch) -> None:
-    sys.argv = ["autocommit"]
+    sys.argv = ["lcm"]
 
     captured: list[object] = []
     monkeypatch.setattr(
@@ -1936,7 +1936,7 @@ def test_logger_falls_back_to_nullhandler(
 
 def test_parse_rewrite_rejects_bulk_threshold_flag() -> None:
     """Rewrite parser should not expose commit-only bulk-change flags."""
-    sys.argv = ["autocommit", "rewrite", "--bulk-threshold", "10"]
+    sys.argv = ["lcm", "rewrite", "--bulk-threshold", "10"]
 
     with pytest.raises(SystemExit):
         autocommit.parse_args()
@@ -1944,7 +1944,7 @@ def test_parse_rewrite_rejects_bulk_threshold_flag() -> None:
 
 def test_parse_rewrite_rejects_force_ai_flag() -> None:
     """Rewrite parser should not expose commit-only bulk-change flags."""
-    sys.argv = ["autocommit", "rewrite", "--force-ai"]
+    sys.argv = ["lcm", "rewrite", "--force-ai"]
 
     with pytest.raises(SystemExit):
         autocommit.parse_args()
@@ -2262,23 +2262,23 @@ def test_build_fallback_bulk_subject() -> None:
 
 
 def test_parse_bulk_threshold() -> None:
-    """bulk_threshold reads from AUTOCOMMIT_BULK_THRESHOLD env var."""
-    os.environ["AUTOCOMMIT_BULK_THRESHOLD"] = "25"
+    """bulk_threshold reads from LAZYCOMMIT_BULK_THRESHOLD env var."""
+    os.environ["LAZYCOMMIT_BULK_THRESHOLD"] = "25"
     try:
         cfg = Config(subcommand="commit")
         assert cfg.bulk_threshold == 25
     finally:
-        del os.environ["AUTOCOMMIT_BULK_THRESHOLD"]
+        del os.environ["LAZYCOMMIT_BULK_THRESHOLD"]
 
 
 def test_parse_reasoning_effort_default() -> None:
-    """reasoning_effort reads from AUTOCOMMIT_REASONING_EFFORT env var."""
-    os.environ["AUTOCOMMIT_REASONING_EFFORT"] = "minimal"
+    """reasoning_effort reads from LAZYCOMMIT_REASONING_EFFORT env var."""
+    os.environ["LAZYCOMMIT_REASONING_EFFORT"] = "minimal"
     try:
         cfg = Config(subcommand="commit")
         assert cfg.reasoning_effort == "minimal"
     finally:
-        del os.environ["AUTOCOMMIT_REASONING_EFFORT"]
+        del os.environ["LAZYCOMMIT_REASONING_EFFORT"]
 
 
 def test_parse_force_ai() -> None:
@@ -2290,13 +2290,13 @@ def test_parse_force_ai() -> None:
 def test_load_xdg_config_bulk_threshold(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """bulk_threshold in TOML sets AUTOCOMMIT_BULK_THRESHOLD env var."""
-    config_dir = tmp_path / "autocommit"
+    """bulk_threshold in TOML sets LAZYCOMMIT_BULK_THRESHOLD env var."""
+    config_dir = tmp_path / "lazycommit"
     config_dir.mkdir()
     (config_dir / "config.toml").write_text('bulk_threshold = 30\n')
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    monkeypatch.delenv("AUTOCOMMIT_BULK_THRESHOLD", raising=False)
+    monkeypatch.delenv("LAZYCOMMIT_BULK_THRESHOLD", raising=False)
 
     git_module.load_xdg_config()
 
-    assert os.environ.get("AUTOCOMMIT_BULK_THRESHOLD") == "30"
+    assert os.environ.get("LAZYCOMMIT_BULK_THRESHOLD") == "30"

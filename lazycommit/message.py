@@ -7,8 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
-from autocommit.config import Config
-from autocommit.constants import MAX_SUBJECT_LEN, SCOPE_RE
+from lazycommit.config import Config
+from lazycommit.constants import MAX_SUBJECT_LEN, SCOPE_RE
 
 
 class CommitMessage(BaseModel):

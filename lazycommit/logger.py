@@ -1,6 +1,6 @@
 """Persistent file logger for post-mortem debugging of hangs and errors.
 
-Writes to ~/.local/state/autocommit/autocommit.log (XDG_STATE_HOME aware).
+Writes to ~/.local/state/lazycommit/lazycommit.log (XDG_STATE_HOME aware).
 Rotates at 2 MB, keeps 3 backups. Never raises; setup failures fall back to a
 NullHandler so commit flows still proceed.
 """
@@ -17,13 +17,13 @@ def _log_path() -> Path:
     state_home = (
         os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
     )
-    log_dir = Path(state_home) / "autocommit"
+    log_dir = Path(state_home) / "lazycommit"
     log_dir.mkdir(parents=True, exist_ok=True)
-    return log_dir / "autocommit.log"
+    return log_dir / "lazycommit.log"
 
 
 def _make_logger() -> logging.Logger:
-    logger = logging.getLogger("autocommit")
+    logger = logging.getLogger("lazycommit")
     if logger.handlers:
         return logger
     logger.setLevel(logging.DEBUG)

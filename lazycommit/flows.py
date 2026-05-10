@@ -11,17 +11,17 @@ from collections.abc import Callable
 from types import FrameType
 from typing import Any, cast
 
-from autocommit.api import UsageStats, generate_commit_json
-from autocommit.config import Config
-from autocommit.console import (
+from lazycommit.api import UsageStats, generate_commit_json
+from lazycommit.config import Config
+from lazycommit.console import (
     _print_verbose_request,
     _print_verbose_response,
     err,
     out,
     warn,
 )
-from autocommit.constants import GIT_COMMIT_TIMEOUT_S, GIT_PUSH_TIMEOUT_S, SYSTEM_PROMPT
-from autocommit.git import (
+from lazycommit.constants import GIT_COMMIT_TIMEOUT_S, GIT_PUSH_TIMEOUT_S, SYSTEM_PROMPT
+from lazycommit.git import (
     auto_stage,
     build_user_context,
     get_branch_name,
@@ -35,13 +35,13 @@ from autocommit.git import (
     run_git,
     truncate_diff,
 )
-from autocommit.logger import log_error, log_info, log_warning
-from autocommit.message import (
+from lazycommit.logger import log_error, log_info, log_warning
+from lazycommit.message import (
     CommitMessage,
     assemble_message,
     build_fallback_message,
 )
-from autocommit.rewrite import (
+from lazycommit.rewrite import (
     _apply_filter_repo,
     _build_commit_context,
     _check_filter_repo,
@@ -143,7 +143,7 @@ def _print_summary(elapsed: float, usage_stats: UsageStats | None) -> None:
 
 def _commit_flow(config: Config) -> int:
     """Execute the commit workflow, including deterministic fallback paths."""
-    from autocommit.console import die
+    from lazycommit.console import die
 
     start = time.perf_counter()
     log_info(
@@ -313,7 +313,7 @@ def _commit_flow(config: Config) -> int:
 
 def _rewrite_flow(config: Config) -> int:
     """Execute the commit-history rewrite workflow."""
-    from autocommit.console import die
+    from lazycommit.console import die
 
     start = time.perf_counter()
     log_info(
